@@ -225,6 +225,7 @@ export default class Agents extends View {
     let list = agents();
     this.listed = new Map(list.map((a) => [a.address, a.status]));
     const all = terminals();
+    const messages = new Map(all.map(t => [t.address, t.report?.msg]));
     this.migratePins(all);
     const shown = focused()?.agent;
     const now = Date.now();
@@ -299,11 +300,13 @@ export default class Agents extends View {
     const row = (a, i, subs = []) => {
       const pic = icon(a.program, 16, t.foreground);
       const more = detail.get(a.address);
+      const message = messages.get(a.address);
       // An agent on another machine (`vps/t7`) says which.
       const machine = a.address.includes("/") ? a.address.split("/")[0] : null;
       if (collapsed) {
         return h_flex()
           .id(`ag-${a.address}`)
+          .when(Boolean(message), el => el.tooltip(message))
           .h(26)
           .mx(6)
           .px(2)
@@ -343,6 +346,7 @@ export default class Agents extends View {
       const name = full ? a.space_name || label(a) : more ?? (/^\d+$/.test(label(a)) ? a.program?.name || label(a) : label(a));
       return h_flex()
         .id(`ag-${a.address}`)
+        .when(Boolean(message), el => el.tooltip(message))
         .px(8)
         .h(30)
         .flex_none()

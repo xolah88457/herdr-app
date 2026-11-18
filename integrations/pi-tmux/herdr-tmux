@@ -1,0 +1,269 @@
+#!/usr/bin/env python3
+"""Attach to an existing tmux session and report its Pi activity to Herdr."""
+
+import argparse
+import base64
+import os
+import re
+import signal
+import subprocess
+import sys
+import termios
+import time
+
+
+INTERVAL = 0.5
+POLL_BUDGET = 0.45
+CLIENT_FORMAT = "C|#{client_pid}|#{session_id}|#{client_name}"
+PANE_FORMAT = (
+    "P|#{session_id}|#{window_id}|#{window_index}|#{pane_index}|"
+    "#{pane_id}|#{pane_tty}|#{pane_dead}"
+)
+CLIENT = re.compile(rb"C\|([0-9]+)\|(\$[0-9]+)\|(/dev/[a-zA-Z0-9/_-]+)")
+PANE = re.compile(
+    rb"P\|(\$[0-9]+)\|(@[0-9]+)\|([0-9]+)\|([0-9]+)\|(%[0-9]+)\|"
+    rb"/dev/([a-zA-Z0-9/_-]+)\|0"
+)
+OPTION = re.compile(rb"@herdr_pi ([1-9][0-9]{0,6}):(error|blocked|working|done|idle)")
+MAX_PID = 99999 if sys.platform == "darwin" else 4194304
+ATTENTION = {b"error": 3, b"blocked": 3, b"working": 2, b"done": 1, b"idle": 0}
+CLEAR = b"\x1b]7501;state=clear:app=pi\x1b\\"
+
+
+def find_client(lines, pid):
+    for line in lines:
+        match = CLIENT.fullmatch(line)
+        if match and int(match[1]) == pid:
+            return match[2], match[3]
+    return None
+
+
+def process_info(run, pids):
+    if not pids:
+        return {}
+    # A missing PID is normal and ps exits 1 if none of the PIDs exist.
+    lines = run(
+        ["/bin/ps", "-p", ",".join(map(str, sorted(pids))), "-o", "pid=,stat=,tty=,lstart="],
+        ok=(0, 1),
+    )
+    result = {}
+    for line in lines:
+        fields = line.split(None, 3)
+        if len(fields) == 4 and fields[0].isdigit() and fields[1][:1] not in (b"Z", b"X"):
+            pid, _, tty, birth = fields
+            result[int(pid)] = (tty, birth)
+    return result
+
+
+class Monitor:
+    def __init__(self, tmux, env):
+        self.tmux = tmux
+        self.env = dict(env, LC_ALL="C")
+        self.births = {}
+
+    def sample(self, client_pid):
+        deadline = time.monotonic() + POLL_BUDGET
+
+        def run(args, ok=(0,)):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError
+            result = subprocess.run(
+                args, env=self.env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL, timeout=remaining,
+            )
+            if result.returncode not in ok:
+                raise subprocess.CalledProcessError(result.returncode, args)
+            return result.stdout.split(b"\n")
+
+        try:
+            return self.read(client_pid, run)
+        except (OSError, subprocess.SubprocessError):
+            return None
+
+    def read(self, client_pid, run):
+        clients = ["list-clients", "-F", CLIENT_FORMAT]
+        client = find_client(run(self.tmux + clients), client_pid)
+        if client is None:
+            return None
+        session, tty = client
+        target_session = session.decode("ascii")
+
+        rows = run(self.tmux + ["list-panes", "-s", "-t", target_session, "-F", PANE_FORMAT])
+        panes = [m for row in rows if (m := PANE.fullmatch(row)) and m[1] == session]
+        if not panes:
+            return None
+
+        # Format option lookups can inherit values. Query the local option
+        # instead; without -v, tmux quotes malformed values on a single line.
+        # if-shell -F is a tmux format check, not a shell command. Gate the
+        # batch on the child's TTY still belonging to the PID-mapped session,
+        # and recheck the PID mapping afterward. All interpolated identifiers
+        # have already been restricted to tmux IDs, indices, or a PTY path.
+        attached = f"#{{m/r:(^|#,){tty.decode('ascii')}(#,|$),#{{session_attached_list}}}}"
+        guard = f"#{{&&:#{{==:#{{session_id}},{target_session}}},{attached}}}"
+        batch = []
+        for pane in panes:
+            target = f"{target_session}:{pane[2].decode()}.{pane[4].decode()}"
+            batch.extend([
+                f'display-message -p -t {target} "{PANE_FORMAT}"',
+                f"show-options -pq -t {target} @herdr_pi",
+            ])
+        batch.append(f'list-clients -F "{CLIENT_FORMAT}"')
+        lines = run(self.tmux + ["if-shell", "-F", "-t", target_session, guard, " ; ".join(batch)])
+        if find_client(lines, client_pid) != client:
+            return None  # switch-client or detach raced the batch
+
+        candidates = []
+        pane = None
+        for line in lines:
+            match = OPTION.fullmatch(line)
+            if match and pane and int(match[1]) <= MAX_PID:
+                candidates.append((pane, int(match[1]), match[2]))
+            # An option belongs only to the immediately preceding pane record.
+            pane = PANE.fullmatch(line)
+            if pane and pane[1] != session:
+                pane = None
+
+        procs = process_info(run, {pid for _, pid, _ in candidates})
+        births = {}
+        winners = []
+        for pane, pid, state in candidates:
+            key = (pane[5], pid)
+            birth = self.births.get(key)
+            proc = procs.get(pid)
+            if proc and proc[0] == pane[6] and birth is None:
+                birth = proc[1]
+            if birth is not None:
+                births[key] = birth
+            if proc and proc == (pane[6], birth):
+                winners.append((-ATTENTION[state], int(pane[3]), int(pane[4]), state))
+        # Same-TTY PID reuse before the first observation is indistinguishable
+        # with a PID-only publisher record. Reject reuse we can observe.
+        self.births = births
+        if winners:
+            _, window, pane_index, state = min(winners)
+            return state, window, pane_index
+        return None
+
+
+def report(status):
+    if status is None:
+        return CLEAR
+    state, window, pane = status
+    msg = base64.b64encode(f"tmux window {window}, pane {pane}".encode("ascii"))
+    return b"\x1b]7501;state=" + state + b":app=pi:msg=" + msg + b"\x1b\\"
+
+
+def child_stopped(child):
+    if not hasattr(os, "waitid"):
+        return False
+    try:
+        return os.waitid(os.P_PID, child.pid, os.WSTOPPED | os.WNOHANG) is not None
+    except ChildProcessError:
+        return False
+
+
+def attach(tmux, env, session):
+    saved = termios.tcgetattr(0)
+    # A separate file description keeps status writes bounded without making
+    # tmux's inherited stdin/stdout nonblocking.
+    status_fd = os.open("/dev/tty", os.O_WRONLY | os.O_NONBLOCK)
+    child = None
+    stop = None
+
+    def request_stop(signum, _frame):
+        nonlocal stop
+        if stop is None:
+            stop = signum
+
+    def emit(status):
+        data = report(status)
+        try:
+            return os.write(status_fd, data) == len(data)
+        except BlockingIOError:
+            return False  # Retry the changed status on the next poll.
+
+    handlers = {}
+    try:
+        for sig in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM, signal.SIGQUIT):
+            handlers[sig] = signal.signal(sig, request_stop)
+        # tmux owns job control (including prefix-z) and gets SIGWINCH and
+        # input directly. Stay in its foreground process group, without a relay.
+        handlers[signal.SIGTSTP] = signal.signal(signal.SIGTSTP, signal.SIG_IGN)
+        child = subprocess.Popen(tmux + ["attach-session", "-E", "-t", session], env=env)
+        monitor = Monitor(tmux, env)
+        last = None
+        while stop is None and child.poll() is None:
+            if child_stopped(child):
+                emit(None)
+                last = None
+                os.kill(os.getpid(), signal.SIGSTOP)
+                child.send_signal(signal.SIGCONT)
+                continue
+            start = time.monotonic()
+            status = monitor.sample(child.pid)
+            if stop is None and child.poll() is None and status != last and emit(status):
+                last = status
+            try:
+                child.wait(timeout=max(0, INTERVAL - (time.monotonic() - start)))
+            except subprocess.TimeoutExpired:
+                pass
+        if stop is not None:
+            return 128 + stop
+        return child.returncode if child.returncode >= 0 else 128 - child.returncode
+    finally:
+        try:
+            if child is not None and child.poll() is None:
+                child.send_signal(stop or signal.SIGTERM)
+                child.send_signal(signal.SIGCONT)
+                try:
+                    child.wait(timeout=0.5)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait()
+        finally:
+            try:
+                if os.tcgetpgrp(0) == os.getpgrp():
+                    termios.tcsetattr(0, termios.TCSANOW, saved)
+            except (OSError, termios.error):
+                pass
+            try:
+                emit(None)
+            except OSError:
+                pass  # The outer PTY may already be gone.
+            os.close(status_fd)
+            for sig, handler in handlers.items():
+                signal.signal(sig, handler)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    socket = parser.add_mutually_exclusive_group()
+    socket.add_argument("-L", metavar="name", help="tmux socket name")
+    socket.add_argument("-S", metavar="socket", help="tmux socket path")
+    parser.add_argument("session", metavar="SESSION", help="existing tmux session target")
+    args = parser.parse_args()
+    if not args.session:
+        parser.error("SESSION cannot be empty")
+
+    tmux = ["tmux", "-N"]  # Never start a server (which could create sessions via config).
+    if args.L is not None:
+        tmux += ["-L", args.L]
+    if args.S is not None:
+        tmux += ["-S", args.S]
+    env = os.environ.copy()
+    for key in ("TMUX", "TMUX_PANE"):
+        env.pop(key, None)
+
+    try:
+        if not (os.isatty(0) and os.isatty(1) and os.tcgetpgrp(0) == os.getpgrp()):
+            parser.error("attach requires a foreground terminal")
+        return attach(tmux, env, args.session)
+    except (OSError, termios.error) as exc:
+        print(f"herdr-tmux: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

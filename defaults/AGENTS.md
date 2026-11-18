@@ -170,6 +170,8 @@ the highlighted line shows where it will land.
   `setAgentOrder(list.map(a => a.address))` on render so `agent.next` /
   `agent.prev` follow its list.
 
+The Agents mod shows a terminal's reported status message on hover, when present. Direct Pi needs no hook. For Pi inside tmux, see `integrations/pi-tmux/` in the source checkout. Each attached Herdr terminal reports one aggregate status; a tmux pane is not a core address.
+
 ## Layouts: `layouts/<name>.json`
 
 Each file is one whole window. `layout.switch` (`ctrl-shift-l`) cycles
