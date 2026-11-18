@@ -43,11 +43,11 @@ function items(p, git) {
       return [
         ...(inTab
           ? [
+              ["Rename", "pane.rename", { pane: tg.pane }],
               ["Split right", "pane.split", { direction: "right", pane: tg.pane }],
               ["Split down", "pane.split", { direction: "down", pane: tg.pane }],
               ...tileItem(inTab),
               ["Zoom", "pane.zoom", { pane: tg.pane }],
-              ["Rename", "pane.rename", { pane: tg.pane }],
             ]
           : []),
         ...(term
