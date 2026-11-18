@@ -106,6 +106,7 @@ function element() {
       if (method === "id") node.id = args[0];
       if (method === "on_click") (node as any).click = args[0];
       if (method === "bg") (node as any).bg = args[0];
+      if (method === "tooltip") (node as any).tooltip = args[0];
       if (method === "child") node.children.push(args[0]?.node ?? args[0]);
       if (method === "children") node.children.push(...args[0].map((child: any) => child?.node ?? child));
       if (method === "when" && args[0]) args[1](el);
@@ -156,14 +157,18 @@ for (const sort of ["priority", "grouped"]) test(`${sort} render reads panes onc
   let reads = 0;
   const orders: string[][] = [];
   const { agents } = harness([], {
-    agents: () => list, terminals: () => list.map(a => ({ ...a, state: "live" })),
+    agents: () => list, terminals: () => list.map((a, i) => ({ ...a, state: "live", report: i === 2 ? { msg: "tmux window 1 pane 3" } : null })),
     panes: () => { reads++; return structuredClone(snapshot); }, focused: () => null,
     spaces: () => [{ tabs: list.map(a => ({ id: a.tab, name: "Claude", named: true })) }],
     layout: () => ({ id: "sidebar", size: { px: 268 } }), shared: () => sort,
     theme: () => ({}), setAgentOrder: (order: string[]) => orders.push(order),
     div: element, v_flex: element, h_flex: element, svg: element, image: element,
   });
-  const first = textOf(agents.render({}).node);
+  const tree = agents.render({}).node;
+  const row = (node: any, id: string): any => node?.id === id ? node : node?.children?.map((child: any) => row(child, id)).find(Boolean);
+  expect(row(tree, "ag-t2").tooltip).toBe("tmux window 1 pane 3");
+  expect(row(tree, "ag-t1").tooltip).toBeUndefined();
+  const first = textOf(tree);
   expect(reads).toBe(1);
   for (let i = 0; i < list.length; i++) expect(first).toContain(`Task ${i}`);
   expect(orders[0]).toHaveLength(list.length);

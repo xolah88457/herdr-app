@@ -189,6 +189,10 @@ floats included, even when the window is covered or minimized. No screen
 capture or permissions. It needs a running window that has drawn a frame;
 `HERDR_APP_HOME` selects the window, as for `status`.
 
+## Pi inside tmux
+
+Direct interactive Pi reports status to core. For Pi running inside tmux, the optional helpers in the source checkout’s `integrations/pi-tmux/` keep Pi where it is: load `herdr-status.ts` in Pi and run `herdr-tmux SESSION` from a Herdr terminal on the same host. Hover the agent row for its reported window/pane. `agent.focus` selects the outer terminal, not the inner Pi. Never start another Pi to inspect the first one.
+
 ## Problems and safety
 
 If Herdr misbehaves, `herdr-app feedback "<what happened>"` drafts a report.

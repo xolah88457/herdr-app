@@ -97,6 +97,10 @@ Builds from source do not update themselves.
 Usage telemetry is on by default in releases. Turn it off in Settings → Privacy.
 Mods are trusted code, not sandboxed extensions. Read [security and privacy](docs/security.md) before installing someone else's mod.
 
+## Using Pi inside tmux
+
+If the Agents panel is empty when Pi runs inside tmux, use the [optional Pi/tmux integration](integrations/pi-tmux/README.md). It keeps Pi in its existing pane and reports the attached session’s most urgent state, even when the Pi needing attention is in another tmux window. Direct Pi terminals need no bridge.
+
 ## For agents
 
 ```sh
