@@ -6,7 +6,7 @@ import { join } from "node:path";
 const source = (await readFile(new URL("../defaults/mods/spaces/main.js", import.meta.url), "utf8"))
   .replace(/^import .*;\n/gm, "").replace("export default class Spaces", "class Spaces").replace(/^export /gm, "");
 
-type Space = { id: string; folder: string; machine?: string | null; active?: boolean };
+type Space = { id: string; name?: string; folder: string; machine?: string | null; active?: boolean };
 function harness(replies: unknown[] = [], storage = new Map<string, string>(), snapshot: Space[] = [], execGit?: (...args: any[]) => Promise<unknown>, watch?: (repo: string) => Promise<string[]>) {
   const calls: string[][] = [];
   const tasks: Promise<unknown>[] = [];
@@ -18,9 +18,11 @@ function harness(replies: unknown[] = [], storage = new Map<string, string>(), s
   const ScrollHandle = { new: () => ({ calls: [] as number[], scroll_to_item(index: number) { this.calls.push(index); } }) };
   const theme = () => new Proxy({}, { get: () => "#000000" });
   const tracked: unknown[] = [];
+  const tooltips: string[] = [];
   const element: any = new Proxy({}, { get: (_, method) => (...args: any[]) => {
     if (String(method).startsWith("on_")) handlers[String(method)] = args.at(-1);
     if (method === "track_scroll") tracked.push(args[0]);
+    if (method === "tooltip") tooltips.push(args[0]);
     return element;
   } });
   const Spaces = new Function("View", "hc", "localStorage", "spaces", "panes", "run", "v_flex", "h_flex", "div", "svg", "shared", "machines", "exec", "window", "watchFolder", "ScrollHandle", "theme", "layout", "setShared", `${source}; return Spaces;`)(
@@ -45,7 +47,7 @@ function harness(replies: unknown[] = [], storage = new Map<string, string>(), s
   view.folded = new Set(["cloud"]);
   view.refreshMachines = () => {};
   const cx = { timer: { every() {} }, notify() {}, spawn(fn: (cx: unknown) => Promise<unknown>) { tasks.push(fn(cx)); } };
-  return { view, calls, tasks, cx, storage, moves, handlers, snapshot, availability, env, tracked };
+  return { view, calls, tasks, cx, storage, moves, handlers, snapshot, availability, env, tracked, tooltips };
 }
 
 test("git grouping reads refs for normal, detached, unborn and bare worktrees", async () => {
@@ -509,6 +511,17 @@ test("the narrow rail reveals the same child", () => {
   h.env.layout = { id: "sidebar", size: { px: 100 } };
   h.view.render();
   expect(h.view.scroll.calls).toEqual([2]);
+});
+
+test("the narrow rail exposes existing automatic and manual space names without renaming", () => {
+  const h = withHandle(scrollHarness([
+    { id: "s1", name: "api", folder: "/projects/api/server" },
+    { id: "s2", name: "My notes", folder: "/tmp" },
+  ]));
+  h.env.layout = { id: "sidebar", size: { px: 100 } };
+  h.view.render();
+  expect(h.tooltips).toEqual(["api", "My notes"]);
+  expect(h.moves).toEqual([]);
 });
 
 test("the list reveals the active space again when its own size changes, and only then", () => {

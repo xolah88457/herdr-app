@@ -160,6 +160,13 @@
                       "content": {
                         "mod": "changes"
                       }
+                    },
+                    {
+                      "id": "taskboard",
+                      "type": "block",
+                      "content": {
+                        "mod": "taskboard"
+                      }
                     }
                   ]
                 }

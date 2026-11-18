@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 
-// Exercise the shipped tab bar's wheel handler without a window or a core.
+// Exercise the shipped tab bar's wheel handler and labels without a window or a core.
 type Handler = (event: unknown) => void;
 class Element {
   nodes: Element[] = [];
@@ -23,11 +23,14 @@ const source = await readFile(new URL("../defaults/mods/tabs/main.js", import.me
 const element = () => new Element();
 const commands: string[] = [];
 const store: Record<string, string> = {};
+const defaultTabs = [{ id: "t1", name: "1" }, { id: "t2", name: "2", active: true }, { id: "t3", name: "3" }];
+const snapshot = { tabs: defaultTabs, panes: [] as unknown[], reads: 0 };
 const values: Record<string, unknown> = {
   View: class {}, div: element, svg: element, image: element, h_flex: element,
   ScrollHandle: { new: () => ({ scroll_to_item() {} }) },
-  spaces: () => [{ id: "s1", active: true, tabs: [{ id: "t1", name: "a" }, { id: "t2", name: "b", active: true }, { id: "t3", name: "c" }] }],
-  panes: () => [], run(command: string) { commands.push(command); }, openOverlay() {}, theme: () => ({}),
+  spaces: () => [{ id: "s1", name: "api", active: true, tabs: snapshot.tabs }],
+  panes: () => { snapshot.reads++; return snapshot.panes; },
+  run(command: string) { commands.push(command); }, openOverlay() {}, theme: () => ({}),
   window: () => null, shared: () => null, layout: () => null, settings: () => ({ zoom: 1 }),
   localStorage: { getItem: (key: string) => store[key] ?? null, setItem(key: string, value: string) { store[key] = value; } },
 };
@@ -45,7 +48,10 @@ function wheel() {
     handler({ delta: { x: 0, y }, delta_lines: lines === undefined ? undefined : { x: 0, y: lines }, touch_phase });
   };
 }
-beforeEach(() => { commands.length = 0; });
+beforeEach(() => {
+  commands.length = 0;
+  Object.assign(snapshot, { tabs: defaultTabs, panes: [], reads: 0 });
+});
 // Bun runs every test file in one process: give the later ones the real clock.
 afterAll(() => setSystemTime());
 
@@ -103,40 +109,85 @@ test("each wheel notch switches one tab", () => {
 
 const label = new Function("View", `${source.replace(/^import .*;\n/gm, "").replace("export default class Tabs", "class Tabs")}; return label;`)(class {});
 
-const claude = { program: { name: "Claude Code", key: "claude", agent: true }, title: "my-task" };
+const claude = { terminal: "remote/t2", program: { name: "Claude Code", key: "claude", agent: true }, title: "My task" };
+const shell = { terminal: "t1", program: { name: "zsh", key: "shell", shell: true }, title: "vim notes.md" };
+const unnamed = { name: "2", named: false };
 
-test("a tab Herdr named after its agent follows the agent's session title", () => {
-  expect(label({ name: "Claude Code", named: true }, claude)).toBe("my-task");
-  expect(label({ name: "", named: false }, claude)).toBe("my-task");
-  expect(label({ name: "", named: false }, { ...claude, title: "✦ [web] login" })).toBe("[web] login");
-  expect(label({ name: "Claude Code", named: true }, { ...claude, title: "renamed-task" })).toBe("renamed-task");
+test("an unnamed tab follows a useful live agent title", () => {
+  expect(label(unnamed, claude)).toBe("My task");
+  expect(label(unnamed, { ...claude, title: "✦ [web] login" })).toBe("[web] login");
+  expect(label(unnamed, { ...claude, title: "[ ! ] ✹  Fix handler\nwith @scope/pkg" })).toBe("Fix handler with @scope/pkg");
 });
 
-test("an empty OSC title published as the terminal address keeps the program label", () => {
-  for (const terminal of ["t2", "remote/t2"]) {
-    const lead = { ...claude, terminal, title: terminal };
-    expect(label({ name: "2", named: false }, lead)).toBe("Claude Code");
-    expect(label({ name: "Claude Code", named: true }, lead)).toBe("Claude Code");
-    expect(label({ name: "fix login", named: true }, lead)).toBe("fix login");
-    expect(label({ name: "2", named: false }, { ...lead, title: "renamed-task" })).toBe("renamed-task");
+test("a non-task OSC title keeps the program label", () => {
+  const generic = ["", "12", "✦", "Claude Code", "CLAUDE", "New session", "Untitled", "t2", "remote/t2", "api", "me@build-box:~/src/api", "~/src/api", "✦ /tmp", "C:/src/api", "✦ C:\\src\\api", "[ . ] \\\\server\\api"];
+  for (const title of generic) {
+    expect(label(unnamed, { ...claude, cwd: "/src/api", title }, { name: "api" })).toBe("Claude Code");
   }
 });
 
-test("a name the person gave stays", () => {
-  expect(label({ name: "fix login", named: true }, claude)).toBe("fix login");
+test("an explicit tab title wins even when it matches its program or positional name", () => {
+  for (const name of ["Claude Code", "2", "fix login"]) expect(label({ name, named: true }, claude)).toBe(name);
 });
 
-test("a title that says nothing new keeps the tab's own name", () => {
-  expect(label({ name: "Claude Code", named: true }, { ...claude, title: "Claude Code" })).toBe("Claude Code");
-  expect(label({ name: "Claude Code", named: true }, { ...claude, title: "me@build-box" })).toBe("Claude Code");
-  expect(label({ name: "", named: false }, { ...claude, title: "" })).toBe("Claude Code");
-  expect(label({ name: "", named: false }, { ...claude, title: "~/src/api" })).toBe("Claude Code");
-  expect(label({ name: "", named: false }, { ...claude, title: "✦ /tmp" })).toBe("Claude Code");
+test("unnamed tabs use foreground program, meaningful folder and branch, and safe fallbacks", () => {
+  expect(label(unnamed, { ...shell, cwd: "/src/api/", branch: "main" }, { name: "api" })).toBe("zsh");
+  expect(label(unnamed, { ...shell, cwd: "C:\\src\\web app\\", branch: "(detached)" }, { name: "api" })).toBe("zsh · web app");
+  expect(label(unnamed, { ...shell, program: { name: "Neovim" }, cwd: "/src/api/server", branch: "fix/parser" }, { name: "api" })).toBe("Neovim · server · fix/parser");
+  expect(label(unnamed, { ...claude, cwd: "/worktrees/parser", branch: "parser" })).toBe("My task · parser");
+  expect(label(unnamed, { terminal: "t1", cwd: "/src/api" })).toBe("api");
+  expect(label(unnamed, { terminal: null, mod: "board", title: "board" })).toBe("board");
+  expect(label(unnamed, undefined)).toBe("Terminal");
 });
 
-test("a shell's title never replaces its tab's name", () => {
-  const shell = { program: { name: "zsh", key: "zsh" }, title: "vim notes.md" };
-  expect(label({ name: "", named: false }, shell)).toBe("zsh");
-  expect(label({ name: "notes", named: true }, shell)).toBe("notes");
-  expect(label({ name: "", named: false }, undefined)).toBe("Terminal");
+test("tab render follows the first agent over other splits and stops when renamed", () => {
+  const tab = { id: "t1", active: true, ...unnamed };
+  snapshot.tabs = [tab];
+  const lead = { ...claude, tab: tab.id };
+  snapshot.panes = [{ tab: tab.id, terminal: null, mod: "board" }, { ...shell, tab: tab.id, focused: true },
+    lead, { ...lead, terminal: "t3", title: "Other split" }];
+  const view = new Tabs();
+  view.init();
+  const renderedName = () => {
+    const root: Element = view.render();
+    const item = root.nodes[0].nodes[0];
+    expect(item.calls.tooltip).toEqual(item.nodes[0].nodes);
+    return item.nodes[0].nodes[0];
+  };
+  expect(renderedName()).toBe("My task");
+  lead.title = "Rewrite parser";
+  expect(renderedName()).toBe("Rewrite parser");
+  tab.name = "Claude Code";
+  tab.named = true;
+  expect(renderedName()).toBe("Claude Code");
+  tab.named = false;
+  expect(renderedName()).toBe("Rewrite parser");
+  snapshot.panes.splice(2);
+  expect(renderedName()).toBe("zsh");
+  expect(snapshot.reads).toBe(5);
+  expect(commands).toEqual([]);
+});
+
+test("agent launches from the new-tab menu leave the tab unnamed", async () => {
+  const menuSource = await readFile(new URL("../defaults/mods/new-menu/main.js", import.meta.url), "utf8");
+  const launches: unknown[][] = [];
+  const globals = {
+    ...values, v_flex: element, props: () => ({ overlay: "menu" }), closeOverlay() {}, keys: () => [],
+    run: (...args: unknown[]) => launches.push(args),
+  };
+  const Menu = new Function(...Object.keys(globals), menuSource.replace(/^import .*;\n/gm, "")
+    .replace("export default class NewMenu", "return class NewMenu"))(...Object.values(globals));
+  const menu = new Menu();
+  menu.agents = [{ key: "claude", name: "Claude Code", installed: true, run: ["claude"] }];
+  const root: Element = menu.render();
+  const findRow = (node: Element): Element | undefined => {
+    if (node.calls?.id?.[0] === "claude") return node;
+    for (const child of node.nodes ?? []) {
+      const found = findRow(child);
+      if (found) return found;
+    }
+  };
+  (findRow(root)?.calls.on_click[0] as Handler)(null);
+  (root.calls.on_key_down[0] as Handler)({ key: "1", modifiers: {} });
+  expect(launches).toEqual(Array(2).fill(["tab.new", { space: "s1", argv: ["claude"] }]));
 });

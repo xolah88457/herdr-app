@@ -118,7 +118,10 @@ the highlighted line shows where it will land.
   that machine's home. Explicit invalid folders still fail.
 - A **tab** is a piece of work in a space: its terminals and how they're
   split right and down. One nobody named is called by its place (1, 2,
-  ...), as in Herdr; `tab.rename` names it ("fix login"). A space
+  ...) in the model. The `tabs` mod instead shows the first agent's live task
+  title or the program, with folder and feature branch when informative.
+  `tab.rename` names it ("fix login"); explicit names win even if they match a
+  program name. Clear a name to resume automatic labels. A space
   has one or more; closing the last one closes the space (it stays in
   `recent`).
 - A tab can be **settled** (`tab.settle`): put away on this screen, still running;
@@ -174,9 +177,9 @@ through them, `layout.switch {name}` picks one; `shared("layout")` is the
 shown one's name. Herdr ships `main` ("Herdr": spaces by machine and the
 agents list on the left, `workspace-chrome`; tabs as pills with a + menu
 that starts a terminal or any installed agent, `new-menu`; panes as cards
-with a header; Files and Changes panels on the right, `files` and
-`changes`, opened from the tab bar and remembered per space (which ones:
-shared `"workspace.panels"`, set by the welcome); a status bar,
+with a header; Files, Changes and Tasks panels on the right, opened from
+the tab bar and remembered per space (`workspace.panels` controls Files and
+Changes, while Tasks is available in layouts with the `taskboard` block); a status bar,
 `workspace-status`), and as examples `terminals` ("Terminals": tabs in
 the title bar, panes as cards, a space picker) and `win98`
 ("Herdr 98": a whole desktop in one mod, `win98`). Add a layout by
@@ -184,6 +187,15 @@ writing a new file. The Files panel supports Windows folder paths with spaces,
 parentheses and apostrophes, and preserves Unicode file and folder names
 (including Chinese). Directory links expand as folders; their contents load
 only when expanded.
+
+The `taskboard` mod reads `tsk list --json` in the space's folder on its
+machine (Git project, or tsk's Desk outside Git). **Refresh** rereads the
+board; **Open tsk** starts the upstream TUI there to edit it. Install `tsk`
+on that machine; Herdr does not install or maintain a second task store.
+The + menu on local macOS/Linux spaces can launch `entwurf pi` in tmux.
+**Set up Entwurf for Pi…** confirms before running `entwurf install` in the
+focused terminal's folder. This updates Pi registration; opening the menu or
+launching a tab does not perform setup. See the fork README for prerequisites.
 
 **Herdr's own layouts and mods are read-only.** They are replaced whole
 on every start. Use settings.json for look (fonts, sizes, theme, colors,

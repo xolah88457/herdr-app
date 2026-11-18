@@ -38,7 +38,13 @@ herdr-app do space.new --name eng-123 --folder ~/code/app/eng-123 --argv '["clau
 
 Pick an explicit, useful name for every new space and tab; don't rely on
 default names. Use IDs from `ls` rather than guessing or acting on the wrong
-focused pane.
+focused pane. In the tab bar, unnamed tabs show live contextual labels; these
+are not persisted names or identifiers.
+
+The main layout’s Tasks panel uses `tsk` in the space’s folder on its machine;
+use `tsk list --json` there to read the same board. The + menu can start
+Entwurf Pi in tmux on a local Mac or Linux machine. Its separate setup action
+writes Pi settings: do not register it on the person's behalf without consent.
 
 ```sh
 herdr-app do space.new --name api --folder /path/to/api
