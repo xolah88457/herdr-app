@@ -1740,6 +1740,11 @@ impl AppWindow {
     /// else the window, where the app's keys work.
     fn restore_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let dialog = self.overlays.iter().rev().find(|o| o.kind.modal_keys()).map(|o| o.focus.clone());
+        // A dialog whose mod already focused something inside it (its input) keeps that:
+        // handing the keyboard to the frame would leave typing with nowhere to go.
+        if dialog.as_ref().is_some_and(|d| d.contains_focused(window, cx)) {
+            return;
+        }
         // A mod block holding the keyboard gets it back (a popup over it closed).
         if dialog.is_none() && self.focused_block.as_ref().is_some_and(|b| self.mod_block_shown(b)) {
             self.focus.focus(window, cx);
@@ -2705,7 +2710,8 @@ impl AppWindow {
     }
 
     /// A space with its first tab and terminal, shown at once unless focus is false.
-    /// `machine`: another machine (`hc machine ls`); its space starts in that machine's home.
+    /// `machine`: another machine (`hc machine ls`). Without `folder`, it starts in the
+    /// focused pane's folder when that pane is on the same machine, else in that machine's home.
     fn new_space(&mut self, name: &str, folder: Option<String>, ctx_name: Option<&str>, argv: Option<Vec<String>>, task: Option<&str>, machine: Option<String>, focus: bool, window: &Window) -> Result<Value, String> {
         let follow = folder.is_none();
         let on = machine.as_deref();
