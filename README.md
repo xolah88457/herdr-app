@@ -60,6 +60,12 @@ The window arranges terminals. The core runs them.
 Closing the window leaves them running; closing a pane or tab ends its terminals.
 After a reboot or core crash, kept panes get fresh shells in their last folders, not their old programs.
 
+### Tile sessions
+
+To code in one tab while reviewing an agent in another, right-click a terminal or its tab and choose **Tile sessions…**. Assign terminals from the same space to left/right halves, top/bottom halves, or corners, then open the tiled view. Click inside a tile to type in that session. If the terminal program handles right-clicks, use **Shift+right-click**.
+
+Closing the tiled view returns to your tabs. It does not move panes, merge tabs, or stop their programs. For a permanent rearrangement of existing splits **within one tab**, drag a pane’s top-center grip onto the edge of another pane instead.
+
 ## Work on another machine
 
 Add an SSH machine from Settings → Machines or the sidebar's Add machine action.

@@ -36,6 +36,11 @@ To start one the person will look at later without moving them there, pass
 herdr-app do space.new --name eng-123 --folder ~/code/app/eng-123 --argv '["claude"]' --task "Implement ENG-123" --focus false
 ```
 
+To show existing sessions together without changing their tabs, open the
+`session-tiles` picker with `herdr-app do mod.open --name session-tiles`.
+It offers terminals in the current space, including agent terminals in other
+tabs. Closing the tiled view leaves their sessions running.
+
 Pick an explicit, useful name for every new space and tab; don't rely on
 default names. Use IDs from `ls` rather than guessing or acting on the wrong
 focused pane.

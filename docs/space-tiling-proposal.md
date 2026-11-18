@@ -1,6 +1,6 @@
 # Proposal: tile whole spaces in the Herdr layout
 
-**Status: awaiting maintainer review; not implemented.**
+**Whole-space tiling: awaiting maintainer review; not implemented.** Terminal-session tiling inside a single space is separate and works with the existing desktop mod API: see [Tile sessions](../README.md#tile-sessions). That view does not move panes or merge tabs.
 
 Right-click a space in the Herdr sidebar and choose Left, Right, Top, Bottom or one of the four corners. For example, while working in API, right-click Web and choose Right: API stays on the left and Web appears on the right. Each tile shows the space's selected tab, including its existing split terminals and mod panes. Clicking a pane should give it keyboard focus without moving either tile. Returning to a single space must not close anything. Drag and drop is not required.
 
