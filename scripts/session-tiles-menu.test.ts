@@ -13,7 +13,7 @@ const { items, Menu } = new Function("panes", "terminals", "View", "props", "clo
   `${source}; return { items, Menu };`)(() => panes, () => [], class {}, () => ({}), () => {},
     (o: unknown) => overlays.push(o), (...c: unknown[]) => commands.push(c));
 
-const tile = (tab: string, target: object) => items({ tab, target }, null).find(([label]: string[]) => label === "Tile sessions…");
+const tile = (tab: string, target: object) => items({ tab, target }, null).find(([label]: string[]) => label === "Floating session view…");
 
 test("both tab and pane menus tile the clicked session, not the active one", () => {
   const clicked = tile("pane", { pane: "host/p3", terminal: "host/t1" });

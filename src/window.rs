@@ -9,7 +9,9 @@ mod floats;
 mod movable;
 mod pane_drag;
 mod pane_size;
+mod tile_input;
 mod titlebar;
+mod workspace_tiles;
 
 use crate::layout::{Axis, Background as Paint, Content, Fit, HeaderContent, Kind, Line, Node, PaneFrame, Size as Span};
 use crate::model::{self, Tab, Model};
@@ -353,6 +355,8 @@ impl OverlayKind {
 struct Overlay {
     id: String,
     kind: OverlayKind,
+    /// The built-in context menu is showing its native placement choices.
+    tile_picker: bool,
     slot: String,
     at: Point<Pixels>,
     /// As designed; drawn at the current zoom. Up to 1: a share of the window.
@@ -398,6 +402,7 @@ pub struct AppWindow {
     failed_loads: HashSet<String>,
     mod_stamps: RefCell<HashMap<String, crate::files::ModStamp>>,
     chrome: Node,
+    workspace_tiles: workspace_tiles::WorkspaceTiles,
     /// Which layout `chrome` is (`layouts/<name>.json`).
     layout_name: String,
     /// The agent an `{ "agent": "focused" }` block shows (by address); any core
@@ -536,6 +541,7 @@ impl AppWindow {
             failed_loads: HashSet::new(),
             mod_stamps: RefCell::new(HashMap::new()),
             chrome: default_layout("main"),
+            workspace_tiles: Default::default(),
             layout_name: "main".into(),
             agent: None,
             agent_focused: None,
@@ -800,7 +806,12 @@ impl AppWindow {
                         None => this.tend_terminals(false, window, cx),
                     }
                     if changed { this.sync(window, cx); }
-                    this.fit_hidden_tabs(window, cx);
+                    // In tiled mode other tabs can be on screen at their actual tile size.
+                    if this.workspace_tiling_active() {
+                        this.hidden_fit = pane_size::HiddenFit::Unknown;
+                    } else {
+                        this.fit_hidden_tabs(window, cx);
+                    }
                     this.flush_documents(refresh, window, cx);
                 }).is_err() { break; }
                 cx.background_executor().timer(Duration::from_millis(500)).await;
@@ -1302,14 +1313,12 @@ impl AppWindow {
                 }
             }
         }
-        if self.shows_tab()
-            && let Some(c) = self.model.active_tab()
-        {
+        if self.shows_tab() {
             let header = self.pane_frame().and_then(|f| f.header.as_ref()).and_then(|h| match &h.content {
                 HeaderContent::Mod { name, props } => Some((name.clone(), props.clone())),
                 HeaderContent::Builtin(_) => None,
             });
-            for n in c.shown().visible_blocks() {
+            for n in self.workspace_roots().flat_map(Node::visible_blocks) {
                 if let Some((name, props)) = &header
                     && n.is_pane()
                 {
@@ -1545,6 +1554,7 @@ impl AppWindow {
         self.enroll_link_handlers();
         self.refresh_link_handlers();
         self.model.order_spaces();
+        self.workspace_tiles.reconcile(&mut self.model);
         let (model, live) = (&self.model, &self.live);
         self.swapped.retain(|p, a| model.address_of(p).is_some() && live.contains_key(a));
         let (mut terms, mods_visible) = self.visible();
@@ -3814,8 +3824,8 @@ impl AppWindow {
     fn neighbor(&self, from: &str, dir: &str, use_history: bool) -> Option<String> {
         let bounds = self.bounds.borrow();
         let cur = *bounds.get(from)?;
-        let mut candidates: Vec<String> = self.model.active_tab().into_iter()
-            .flat_map(|c| c.shown().visible_blocks().into_iter().filter(|n| n.is_pane()).map(|n| n.id.clone()))
+        let mut candidates: Vec<String> = self.workspace_roots().flat_map(Node::visible_blocks)
+            .filter(|n| n.is_pane()).map(|n| n.id.clone())
             .collect();
         if use_history {
             candidates.extend(self.chrome.visible_blocks().into_iter().filter(|n| self.focusable(&n.id)).map(|n| n.id.clone()));
@@ -3827,7 +3837,7 @@ impl AppWindow {
     /// `pane.go`: the nearest pane or focusable mod.
     fn go(&mut self, dir: &str, window: &mut Window, cx: &mut Context<Self>) {
         let Some(from) = self.focused_block.clone().or_else(|| self.model.focused_pane()) else { return };
-        let to = self.model.active_tab().filter(|tab| tab.zoomed.as_deref() == Some(from.as_str()))
+        let to = self.model.active_tab().filter(|tab| !self.workspace_tiling_active() && tab.zoomed.as_deref() == Some(from.as_str()))
             .and_then(|tab| self.unzoomed_neighbor(tab, &from, dir))
             .or_else(|| self.neighbor(&from, dir, true));
         let Some(to) = to else { return };
@@ -3865,7 +3875,7 @@ impl AppWindow {
     fn mod_block_shown(&self, id: &str) -> bool {
         self.copies.contains_key(id)
             && (self.chrome.visible_blocks().iter().any(|n| n.id == id && matches!(n.content(), Some(Content::Mod { .. })))
-                || self.model.active_tab().is_some_and(|t| t.shown().visible_blocks().iter().any(|n| n.id == id)))
+                || (self.shows_tab() && self.workspace_roots().flat_map(Node::visible_blocks).any(|n| n.id == id)))
     }
 
     /// Its mod.json says `"focusable": true` (`go` asks only of visible blocks).
@@ -3884,15 +3894,10 @@ impl AppWindow {
             _ => return Err(format!("direction must be left, right, up or down, not {dir:?}")),
         };
         let found = {
-            let tab = self.model.tab_of(pane).ok_or_else(|| format!("no pane {pane:?}"))?;
+            self.model.tab_of(pane).ok_or_else(|| format!("no pane {pane:?}"))?;
             // Measurements of a tab not drawn now are stale (or missing).
-            if !self.shows_tab() || self.model.active_tab().map(|t| &t.id) != Some(&tab.id) {
-                return Err("that pane isn't on screen".into());
-            }
-            if tab.zoomed.is_some() {
-                return Ok(());
-            }
-            let root = &tab.root;
+            let root = self.workspace_roots().find(|root| self.shows_tab() && root.find(pane).is_some())
+                .ok_or("that pane isn't on screen")?;
             let path = root.path_to(pane).ok_or_else(|| format!("no pane {pane:?}"))?;
             if path.iter().any(|id| root.find(id).is_some_and(|n| n.hidden)) {
                 return Err("that pane isn't on screen".into());
@@ -4054,6 +4059,7 @@ impl AppWindow {
         self.overlays.push(Overlay {
             id,
             kind,
+            tile_picker: false,
             slot,
             at,
             size,
@@ -4560,7 +4566,7 @@ impl AppWindow {
             _ => None,
         })?;
         let ctx = self.model.active_tab()?;
-        (frame.lone || ctx.root.panes().len() > 1).then_some(frame)
+        (self.workspace_tiling_active() || frame.lone || ctx.root.panes().len() > 1).then_some(frame)
     }
 
     /// A pane in its frame: the look, and the header mod above or below it
@@ -4697,20 +4703,9 @@ impl AppWindow {
                     .child("no agents yet. start claude, codex or pi in a terminal")
                     .into_any_element(),
             },
-            Content::Context { .. } => match self.model.active_tab() {
-                Some(c) => self.render_node(c.shown(), focused, self.pane_frame(), cx),
-                None if self.documents.get("").is_some_and(|s| s.layout() == "loading") => div().size_full().into_any_element(),
-                None => {
-                    let key = crate::keys::listing().into_iter().find(|(_, _, a)| a == "space.new").map(|(_, k, _)| format!(" ({k})"));
-                    div()
-                        .size_full()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .text_color(c("dim"))
-                        .child(format!("No space open. Make one{}.", key.unwrap_or_default()))
-                        .into_any_element()
-                }
+            Content::Context { .. } => {
+                let content = self.render_workspace(focused, cx);
+                self.workspace_drop_target(content, cx)
             },
         }
     }
@@ -4726,10 +4721,17 @@ impl AppWindow {
                 .key_context(key_context("Mod", "mod", &inst.name))
                 .when(in_pane, |d| {
                     let id = slot.to_owned();
-                    d.on_any_mouse_down(cx.listener(move |this, _, _, cx| {
+                    d.capture_any_mouse_down(cx.listener(move |this, _, window, cx| {
                         if this.focused_pane.as_deref() != Some(id.as_str()) {
+                            // A tiled terminal remains mounted beside the mod. Release
+                            // its keyboard before the clicked mod handles the press.
+                            if this.workspace_tiling_active() && this.terms.values().any(|t| t.view.read(cx).owns_keyboard_focus(window, cx)) {
+                                this.focus.focus(window, cx);
+                            }
                             this.model.focus_pane(&id);
+                            this.focused_block = None;
                             this.focused_pane = Some(id.clone());
+                            this.synced_model_pane = this.model.focused_pane();
                             this.publish(cx);
                             this.save();
                             cx.notify();
@@ -4899,6 +4901,7 @@ impl AppWindow {
                 Some(l) => self.render_node(l, &HashSet::new(), None, cx),
                 None => self.render_slot(&o.slot, cx),
             };
+            let content = self.workspace_menu(o, content, h.min(viewport.height - px(16.)), cx);
             let body = div()
                 .id(SharedString::from(format!("ov-{}", o.id)))
                 .track_focus(&o.focus)

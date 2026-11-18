@@ -62,9 +62,9 @@ After a reboot or core crash, kept panes get fresh shells in their last folders,
 
 ### Tile sessions
 
-To code in one tab while reviewing an agent in another, right-click a terminal or its tab and choose **Tile sessions…**. Assign terminals from the same space to left/right halves, top/bottom halves, or corners, then open the tiled view. Click inside a tile to type in that session. If the terminal program handles right-clicks, use **Shift+right-click**.
+With one space open, right-click a different space in the sidebar and choose **Tile space…**, then **Right**. Both spaces appear in the main workspace. For sessions from different tabs, right-click the other tab and use **Tile tab…**. A tab placement uses its focused terminal; a space placement shows its selected tab including its splits and mod panes. If a terminal handles right-clicks, use **Shift+right-click** for the pane menu.
 
-Closing the tiled view returns to your tabs. It does not move panes, merge tabs, or stop their programs. For a permanent rearrangement of existing splits **within one tab**, drag a pane’s top-center grip onto the edge of another pane instead.
+Choose a half or corner, or drag the menu’s **Tile** row onto the corresponding workspace edge or corner. Use **Untile workspace** in the placement menu to return without moving panes, merging tabs, or stopping programs. Dragging the sidebar row itself still reorders spaces. **Floating session view…** is a separate, optional window.
 
 ## Work on another machine
 

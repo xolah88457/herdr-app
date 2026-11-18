@@ -1,4 +1,40 @@
 #[test]
+fn placing_a_space_reuses_its_split_and_mod_inside_the_workspace() {
+    in_own_process("inline_space_content");
+}
+
+#[gpui::test]
+fn inline_space_content(cx: &mut gpui::TestAppContext) {
+    use crate::{layout::{Axis, Content, Node}, model::Tab};
+    use serde_json::json;
+    if !running_alone("inline_space_content") { return; }
+    let (view, cx) = open_window(cx, "proof", "export default () => null;", json!({
+        "id": "main", "type": "block", "content": {"tab": "active"}
+    }));
+    cx.update(|window, cx| view.update(cx, |this, cx| {
+        this.model.add_space("api", "API", "", Tab::new("api-tab", "", "api-pane", "t1"));
+        let mut web = Tab::new("web-tab", "", "web-pane", "t2");
+        assert!(web.root.split("web-pane", Axis::Column, Node::block("web-mod", Content::Mod {
+            name: "proof".into(), props: json!({"marker":"web"}),
+        }), "web-split".into()));
+        let original = serde_json::to_value(&web.root).unwrap();
+        this.model.add_space_unshown("web", "Web", "", web);
+        assert!(this.place_workspace_tile("space", "web", "right"));
+        this.sync(window, cx);
+        let (terms, mods) = this.visible();
+        for (pane, address) in [("api-pane", "t1"), ("web-pane", "t2")] {
+            assert!(terms.iter().any(|(id, addr)| id == pane && addr == address));
+        }
+        assert!(mods.iter().any(|(id, instance)| id == "web-mod" && instance.props["marker"] == "web"));
+        assert!(this.overlays.is_empty(), "placement belongs to the main workspace");
+        this.clear_workspace_tiles();
+        this.sync(window, cx);
+        assert!(!this.visible().0.iter().any(|(_, addr)| addr == "t2"));
+        assert_eq!(serde_json::to_value(&this.model.space("web").unwrap().tab("web-tab").unwrap().root).unwrap(), original);
+    }));
+}
+
+#[test]
 fn dragging_squeezed_layout_blocks_never_crashes() {
     in_own_process("squeezed_layout_drag");
 }

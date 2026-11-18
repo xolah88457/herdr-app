@@ -36,10 +36,7 @@ To start one the person will look at later without moving them there, pass
 herdr-app do space.new --name eng-123 --folder ~/code/app/eng-123 --argv '["claude"]' --task "Implement ENG-123" --focus false
 ```
 
-To show existing sessions together without changing their tabs, open the
-`session-tiles` picker with `herdr-app do mod.open --name session-tiles`.
-It offers terminals in the current space, including agent terminals in other
-tabs. Closing the tiled view leaves their sessions running.
+For in-place placement, right-click the other space, tab or terminal pane, choose its **Tile** row, then a half or corner. Dragging that menu row onto the workspace also places it. **Untile workspace** restores the ordinary view without changing the source tabs. `herdr-app do mod.open --name session-tiles` opens a separate floating session picker, not the in-place control.
 
 Pick an explicit, useful name for every new space and tab; don't rely on
 default names. Use IDs from `ls` rather than guessing or acting on the wrong

@@ -23,11 +23,11 @@ async function checkout(folder, on) {
 
 // Keep the clicked pane as the target even if another tab has keyboard focus.
 function tileItem(pane) {
-  return pane?.terminal ? [["Tile sessions…", "session-tiles", { pane: pane.pane }]] : [];
+  return pane?.terminal ? [["Floating session view…", "session-tiles", { pane: pane.pane }]] : [];
 }
 
-function items(p, git) {
-  p = p ?? {};
+function items(input, git) {
+  const p = input ?? {};
   const tg = p.target ?? {};
   switch (p.tab) {
     case "pane": {
@@ -90,7 +90,14 @@ function items(p, git) {
 }
 
 function menuIcon(command, args) {
-  const name = command.endsWith(".close") ? "x" : command.endsWith(".rename") ? "square-pen" : command.endsWith(".new") ? "plus" : command === "worktree" ? "git-branch" : command === "app.help" ? "terminal" : command === "app.theme" ? "settings" : command === "pane.split" ? (args?.direction === "down" ? "panel-bottom" : "panel-right") : command === "pane.zoom" ? "square" : "terminal";
+  let name = "terminal";
+  if (command.endsWith(".close")) name = "x";
+  else if (command.endsWith(".rename")) name = "square-pen";
+  else if (command.endsWith(".new")) name = "plus";
+  else if (command === "worktree") name = "git-branch";
+  else if (command === "app.theme") name = "settings";
+  else if (command === "pane.split") name = args?.direction === "down" ? "panel-bottom" : "panel-right";
+  else if (command === "pane.zoom") name = "square";
   return `mods/workspace-chrome/${name}.svg`;
 }
 
@@ -126,7 +133,7 @@ export default class Menu extends View {
     else run(it[1], it[2]);
   }
 
-  render(cx) {
+  render() {
     const t = theme();
     const list = items(props(), this.git);
     return v_flex()
