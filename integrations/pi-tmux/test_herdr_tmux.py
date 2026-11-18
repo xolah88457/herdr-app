@@ -91,8 +91,9 @@ class AttachTest(unittest.TestCase):
                 os.execvpe(argv[0], argv, dict(self.env, **extra_env))  # noqa: S606
             finally:
                 os._exit(127)
-        self.addCleanup(os.close, fd)
+        # Cleanups run in reverse: release the PTY before waiting on its child.
         self.addCleanup(self.reap, pid)
+        self.addCleanup(os.close, fd)
         return pid, fd
 
     @staticmethod
