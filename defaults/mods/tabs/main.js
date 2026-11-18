@@ -11,20 +11,52 @@ function find(node, id) {
   return null;
 }
 
-// Same as the agents mod: drops a status glyph, keeps a leading bracket or quote.
-const clean = (s) => (s ?? "").replace(/^[^\p{L}\p{N}\p{Ps}\p{Pi}]+/u, "").replace(/^\[ [!.] \] /, "").trim();
+// Prefer the first agent, then the first terminal, then a mod-only pane.
+// Moving keyboard focus among splits should not rename the tab.
+function leadPanes(all) {
+  const leads = new Map();
+  const rank = p => p?.program?.agent ? 3 : p?.terminal ? 2 : p ? 1 : 0;
+  for (const p of all) if (rank(p) > rank(leads.get(p.tab))) leads.set(p.tab, p);
+  return leads;
+}
 
-// A tab Herdr named (unnamed, or after its program) follows its agent's live
-// title, as the agents list does; a name the person gave stays.
-function label(tab, lead) {
-  const prog = lead?.program?.name;
-  const base = tab.named ? tab.name : prog ?? "Terminal";
-  if (!lead?.program?.agent) return base;
-  const live = clean(lead.title);
-  // clean() would strip a path's leading ~ or /: test the title with only its status glyph gone.
-  const path = /^[~/]|^[A-Za-z]:\\/.test((lead.title ?? "").replace(/^[^\p{L}\p{N}~/]+/u, ""));
-  const telling = live && live !== lead.terminal && live !== prog && !path && !live.includes("@") && live.toLowerCase() !== lead.program.key;
-  return (tab.name === prog || !tab.named) && telling ? live : base;
+const fold = (s) => s?.toLowerCase();
+const windowsPath = /^(?:[a-z]:[\\/]|\\\\)/i;
+const unixPath = /^(?:\/|~(?:\/|$))/;
+
+function folderName(cwd) {
+  if (!cwd) return "";
+  // POSIX remote paths can contain a literal backslash; split on it only for Windows forms.
+  if (windowsPath.test(cwd)) return cwd.replace(/^[a-z]:/i, "").split(/[\\/]/).filter(Boolean).at(-1) ?? "";
+  return unixPath.test(cwd) ? cwd.split("/").filter(Boolean).at(-1) ?? "" : "";
+}
+
+function agentTitle(lead, folder) {
+  // Drop status glyphs, keeping leading brackets or quotes. Keep path prefixes
+  // until after filtering out titles that are just paths or shell prompts.
+  const live = (lead.title ?? "").replace(/\s+/g, " ").trim().replace(/^\[ [!.] \] /, "")
+    .replace(/^[^\p{L}\p{N}\p{Ps}\p{Pi}./~\\]+/u, "");
+  if (!/[\p{L}\p{N}]/u.test(live) || /^\p{N}+$/u.test(live) || windowsPath.test(live) || unixPath.test(live) || /^\.{1,2}[\\/]/.test(live)) return "";
+  if (/^[\p{L}\p{N}_.-]+@[\p{L}\p{N}_.-]+(?:[:\s]|$)/u.test(live)) return "";
+  const { key, name } = lead.program;
+  const generic = [lead.terminal, lead.terminal?.split("/").at(-1), key, name, lead.app, `${key} code`, folder, lead.branch, "new session", "untitled"];
+  return generic.some(s => fold(s) === fold(live)) ? "" : live;
+}
+
+// A label is derived at render time. Never write it back: `named` is the
+// authority even when a person deliberately chooses the program's name.
+function label(tab, lead, space) {
+  if (tab.named) return tab.name;
+  if (lead?.mod) return lead.name || lead.title || lead.mod;
+  const folder = folderName(lead?.cwd);
+  const task = lead?.program?.agent && agentTitle(lead, folder);
+  const branch = lead?.branch;
+  const parts = [];
+  const add = (part) => { if (part && !parts.some(p => fold(p) === fold(part))) parts.push(part); };
+  add(task || lead?.program?.name);
+  if (fold(folder) !== fold(space?.name)) add(folder);
+  if (branch && !/^(?:main|master|HEAD|\(detached\))$/i.test(branch)) add(branch);
+  return parts.join(" · ") || "Terminal";
 }
 
 export default class Tabs extends View {
@@ -91,6 +123,7 @@ export default class Tabs extends View {
     const t = theme();
     const space = spaces().find(p => p.active);
     const shown = space?.tabs ?? [];
+    const leads = leadPanes(shown.length ? panes() : []);
     const active = shown.findIndex(tab => tab.active);
     const selected = shown[active]?.id;
     if (selected !== this.selected || active !== this.selectedIndex) {
@@ -102,10 +135,11 @@ export default class Tabs extends View {
     const button = (id, label, action) => div().id(id).size(26).flex_none().flex().items_center().justify_center().rounded(6).text_color(t.dim).hover(s => s.bg(t.hover).text_color(t.foreground))
       .on_mouse_down("left", stop).on_click(action).child(label);
     const item = (c, i) => {
-      const lead = panes().find(p => p.tab === c.id && p.program?.agent) ?? panes().find(p => p.tab === c.id);
+      const lead = leads.get(c.id);
       const program = lead?.program;
-      const name = label(c, lead);
+      const name = label(c, lead, space);
       return h_flex().id(`tab-${c.id}`).h(29).px(10).gap(7).rounded(7).items_center().flex_none().text_size(12.8)
+        .tooltip(name)
         // A rename or status dot on this or an earlier tab can push the active one out.
         .when(i <= active, el => el.on_size_change((_size, cx) => { this.scroll.scroll_to_item(active); cx.notify(); }))
         .border(1).border_color(c.active ? t.border : t.chrome).bg(c.active ? t.raised : t.chrome).text_color(c.active ? t.foreground : t.muted)
@@ -129,7 +163,10 @@ export default class Tabs extends View {
       ? Math.max(10, (root.traffic_lights[0] + 64) / settings().zoom - (sidebar?.hidden ? 0 : sidebar?.size?.px ?? 0))
       : 10;
     const panel = find(root, "panel"), body = find(root, "panel-body");
-    const enabled = shared("workspace.panels") ?? ["files", "changes"];
+    const chosen = shared("workspace.panels") ?? ["files", "changes"];
+    // The welcome choices cover Files and Changes. Tasks is available when the layout has it.
+    const hasTasks = body?.children?.some(child => child.id === "taskboard");
+    const enabled = hasTasks ? [...chosen, "taskboard"] : chosen;
     this.syncPanel(space, panel, body, enabled);
     const panelButton = (id, label, icon) => {
       const on = panel && !panel.hidden && body?.active === id;
@@ -150,6 +187,7 @@ export default class Tabs extends View {
       .child(button("tab-new", "+", () => openOverlay({ mod: "new-menu", kind: "popup", width: 250, height: 512 })))
       .when(enabled.includes("files"), el => el.child(panelButton("files", "Files", "mods/files/file.svg")))
       .when(enabled.includes("changes"), el => el.child(panelButton("changes", "Changes", "mods/changes/changes.svg")))
+      .when(Boolean(hasTasks), el => el.child(panelButton("taskboard", "Tasks", "mods/workspace-chrome/circle-check.svg")))
       .when(w?.buttons, el => el.child(button("minimize", w.platform === "windows" ? svg("mods/tabs/win-min.svg").size(16) : "−", () => run("window.minimize")))
         .child(button("maximize", w.platform === "windows" ? svg(`mods/tabs/${w.maximized ? "win-restore" : "win-max"}.svg`).size(16) : "□", () => run("window.maximize")))
         .child(button("close-window", w.platform === "windows" ? svg("mods/tabs/win-close.svg").size(16) : svg("mods/pane/close.svg").size(13), () => run("window.close"))));

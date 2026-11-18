@@ -41,7 +41,7 @@ The app can help install or update a core it cannot use.
 
 A **space** holds work on one machine, usually in one repo. Each space has **tabs**. Split a tab into **panes** to put terminals or mod panels beside each other.
 
-An unnamed space follows its first terminal's folder. Name a space or tab when you want a label that stays.
+An unnamed space follows its first terminal's folder. The tab bar labels unnamed tabs using the program or agent's live task title, adding folder and branch context when useful. Double-click a tab to give it a fixed name; clear the name to resume automatic naming.
 New tabs start in the focused terminal's folder.
 
 The agents sidebar brings agents from your spaces into one list, including workers started by another agent.
@@ -59,6 +59,18 @@ An address such as `t7` means a terminal on the same machine as the terminal sho
 The window arranges terminals. The core runs them.
 Closing the window leaves them running; closing a pane or tab ends its terminals.
 After a reboot or core crash, kept panes get fresh shells in their last folders, not their old programs.
+
+### Tasks and Entwurf in this fork
+
+In the **Herdr** layout, click **Tasks** next to **Files** and **Changes** to show the board; click again to fold it away. Each space remembers its own panel. Install [tsk](https://github.com/smarzban/tsk) on the space’s machine (`brew install smarzban/tap/tsk` on macOS). **Refresh** reads the same tasks as `tsk list` in that space’s folder; **Open tsk** opens its interactive board for adding and editing tasks. No `tsk setup herdr` step is needed.
+
+For [Entwurf](https://github.com/junghan0611/entwurf), use the **+** menu in a local macOS or Linux space:
+
+1. Put tmux, Pi and Entwurf on your terminal’s `PATH`. The tested combination was `npm install -g @junghanacs/entwurf@0.55.1` with Node 24+ and Pi 1.5.2 (supported range: `>=1.5.2 <1.6`). Setup also needs Python 3.
+2. In the project’s terminal folder, choose **Set up Entwurf for Pi…** and review the confirmation. This registers the package and bridge with Pi; it is not required on every launch. `entwurf check-bridge` checks the bridge without sending a model request.
+3. Choose **Entwurf Pi in tmux**. Pi opens in a new Herdr tab. Its Entwurf siblings open in tmux windows, not additional Herdr tabs. Setup and launch never run automatically.
+
+These are desktop integrations, not installs of the original Herdr TUI plugins. [Automatic naming](https://github.com/qu8n/herdr-automatic-rename) needs no shell hook. Entwurf’s tmux workflow avoids the legacy Herdr API; upstream [does not certify the macOS harness rails](https://github.com/junghan0611/entwurf/blob/main/docs/setup-clean-host.md). Neither external tool is bundled.
 
 ## Work on another machine
 
@@ -123,7 +135,7 @@ Clone this repo with its submodules. Use Rust 1.95.0 and Zig 0.16.0, the version
 Linux needs the development packages listed in that workflow.
 
 ```sh
-git clone --recurse-submodules https://github.com/herdrdev/herdr-app.git
+git clone --recurse-submodules --branch feat/workspace-tools https://github.com/xolah88457/herdr-app.git
 cd herdr-app
 just build
 just test
