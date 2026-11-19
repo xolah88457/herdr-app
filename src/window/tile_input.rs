@@ -1,12 +1,12 @@
-//! Window-only workspace placement. Shell sidebar rows reorder with JS-local
-//! mouse presses, not a GPUI drag. The shipped popup knows the exact clicked
-//! owner, so its Tile row is both a placement picker and a typed drag source.
+//! Window-only workspace placement. Shipped chrome rows and the popup's
+//! Tile row carry a typed native drag payload into the workspace drop surface.
 use super::*;
 
 #[derive(Clone)]
 struct TileSource {
     kind: &'static str,
     id: String,
+    window: Option<gpui::WindowId>,
 }
 
 impl TileSource {
@@ -23,7 +23,7 @@ impl TileSource {
             }
             _ => return None,
         };
-        Some(Self { kind, id: id.clone() })
+        Some(Self { kind, id: id.clone(), window: None })
     }
 }
 
@@ -45,6 +45,21 @@ fn button(id: &'static str) -> Stateful<Div> {
     div().id(id).tab_index(0).h(settings::z(29.)).rounded(settings::z(5.)).flex()
         .justify_center().items_center().cursor_pointer().text_color(c("foreground"))
         .hover(|s| s.bg(c("hover"))).focus(|s| s.bg(c("selected")))
+}
+
+pub(super) fn decorate_workspace_rows(root: &ShellRoot, name: &str, window: &Window, cx: &mut App) {
+    let (kind, prefix, release_id) = match name {
+        "spaces" => ("space", "workspace-space-row-", "spaces-release"),
+        "tabs" => ("tab", "workspace-tab-row-", "tabs-release"),
+        _ => return,
+    };
+    let window_id = window.window_handle().window_id();
+    root.decorate_divs(release_id, move |key, row| {
+        let Some(id) = key.strip_prefix(prefix) else { return row };
+        row.on_drag(TileSource { kind, id: id.into(), window: Some(window_id) }, |source, _, _, cx| {
+            cx.new(|_| source.clone())
+        })
+    }, cx);
 }
 
 impl AppWindow {
@@ -108,6 +123,7 @@ impl AppWindow {
     }
 
     fn apply_tile(&mut self, source: &TileSource, placement: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if source.window.is_some_and(|id| id != window.window_handle().window_id()) { return; }
         if self.place_workspace_tile(source.kind, &source.id, placement) {
             self.sync(window, cx);
         }

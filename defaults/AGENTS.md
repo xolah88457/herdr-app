@@ -305,8 +305,9 @@ Properties any node can have:
 In a layout with active-tab content, right-click a space, tab or terminal pane
 and click **Tile space…**, **Tile tab…** or **Tile pane…**. Choose a side or
 corner to place it inline. A space shows its selected tab; a tab places its
-focused pane. Alternatively, drag the menu’s **Tile** row to a content edge or
-corner. Dragging directly between sidebar rows still reorders spaces. Pick
+focused pane. Drag a sidebar space, a terminal tab, or the menu’s **Tile** row
+to a content edge or corner. Dropping in the center cancels; dropping on a
+neighbor in the same list reorders spaces or tabs. Pick
 **Untile workspace** in the placement choices to return to ordinary tabs.
 
 The shipped pane and tab menus also offer **Floating session view…** for terminal panes.

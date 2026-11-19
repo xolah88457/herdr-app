@@ -548,7 +548,7 @@ fn tabs_leave_room_for_macos_traffic_lights(cx: &mut TestAppContext) {
         let tree = describe_with_values(cx, &staged, "mods/tabs", values, None).unwrap();
         let root = tree.lines().next().unwrap();
         assert!(root.contains(&format!(".pl[Number({expected}.0)]")), "{platform}/{titlebar}/{fullscreen}/{width}/{lights}: {tree}");
-        assert!(tree.contains("tab-tab1"), "first tab must remain visible: {tree}");
+        assert!(tree.contains("workspace-tab-row-tab1"), "first tab must remain visible: {tree}");
     }
 }
 

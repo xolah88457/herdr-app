@@ -1872,6 +1872,7 @@ impl AppWindow {
         self.mod_stamps.borrow_mut().entry(copy.inst.name.clone()).or_insert_with(|| crate::files::mod_stamp(&folder.dir));
         match runtime.try_load(&folder.dir, window, cx) {
             Ok(root) => {
+                root.update(cx, |root, cx| tile_input::decorate_workspace_rows(root, &copy.inst.name, window, cx));
                 if self.file_events.is_none() {
                     copy._watch = runtime.watch(&root, window, cx).map_err(|e| tracing::warn!("{}: no hot reload: {e:#}", copy.inst.name)).ok();
                 }
