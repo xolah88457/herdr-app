@@ -689,6 +689,23 @@ fn confirm_dialog_background_follows_the_frame_corners(cx: &mut TestAppContext) 
 }
 
 #[gpui::test]
+fn tiled_pane_header_uses_owning_space_before_bracketed_instance(cx: &mut TestAppContext) {
+    cx.update(gpui_shell::init);
+    let staged = Staged::new();
+    for tiled in [true, false] {
+        let values = fixture(true, json!({"pane":"p2", "workspaceTiled":tiled}), updates("current", "current"));
+        let tree = describe_with_values(cx, &staged, "mods/pane", values, None).unwrap();
+        if tiled {
+            let title = tree.find("text \"Remote\"").expect("use the pane's own space, not active Local");
+            let instance = tree.find(" /remote/project]\"").expect("bracketed instance and folder");
+            assert!(title < instance && tree[title..instance].contains("text \"["), "{tree}");
+        } else {
+            assert!(tree.contains("text \"/remote/project\"") && !tree.contains("text \"Remote\""), "{tree}");
+        }
+    }
+}
+
+#[gpui::test]
 fn pane_header_divider_faces_the_terminal(cx: &mut TestAppContext) {
     cx.update(gpui_shell::init);
     let staged = Staged::new();

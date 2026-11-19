@@ -48,16 +48,6 @@ impl Owner {
         }
     }
 
-    fn caption(&self, model: &Model, home: &str) -> Option<String> {
-        match self {
-            Self::Space(id) => Some(model.space_name(model.space(id)?, home)),
-            Self::Pane(id) => {
-                let space = model.space_of(id)?;
-                Some(format!("{} · {}", model.space_name(space, home), Model::tab_name(space, model.tab_of(id)?)))
-            }
-        }
-    }
-
     fn focused_pane(&self, model: &Model) -> Option<String> {
         match self {
             Self::Space(id) => model.space(id)?.active_tab()?.focused_pane(),
@@ -128,16 +118,7 @@ impl WorkspaceTiles {
 
 #[cfg(test)]
 mod tests {
-    use super::{Axis, Content, Model, Node, Owner, Slot, Tab, WorkspaceTiles, json};
-
-    #[test]
-    fn captions_follow_the_owner_not_the_active_space() {
-        let mut m = spaces();
-        m.add_tab("api", Tab::new("logs", "Logs", "tail", "t4"));
-        m.focus_pane("server");
-        assert_eq!(Owner::Space("web".into()).caption(&m, "").as_deref(), Some("Web"));
-        assert_eq!(Owner::Pane("tail".into()).caption(&m, "").as_deref(), Some("API · Logs"));
-    }
+    use super::{Axis, Content, Model, Node, Slot, Tab, WorkspaceTiles, json};
 
     #[test]
     fn slot_coverage_and_opposites_match_all_eight_drop_positions() {
@@ -258,15 +239,10 @@ impl AppWindow {
         if self.workspace_tiling_active() {
             let mut body = div().relative().size_full().overflow_hidden();
             let half = |n: u8| relative(f32::from(n) / 2.);
-            let home = home();
             for (owner, slot) in &self.workspace_tiles.0 {
-                if let (Some(root), Some(caption)) = (owner.root(&self.model), owner.caption(&self.model, &home)) {
+                if let Some(root) = owner.root(&self.model) {
                     body = body.child(div().absolute().left(half(slot.x)).top(half(slot.y)).w(half(slot.w)).h(half(slot.h))
-                        .flex().flex_col().overflow_hidden()
-                        .child(div().w_full().flex_none().h(settings::z(20.)).px(settings::z(8.))
-                            .flex().items_center().bg(c("chrome")).border_b_1().border_color(c("border"))
-                            .text_size(settings::z(11.)).text_color(c("muted")).child(div().truncate().child(caption)))
-                        .child(div().relative().w_full().flex_1().min_h_0().child(self.render_node(root, focused, frame, cx))));
+                        .overflow_hidden().child(self.render_node(root, focused, frame, cx)));
                 }
             }
             return body.into_any_element();

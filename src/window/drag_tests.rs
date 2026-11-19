@@ -293,7 +293,7 @@ fn workspace_row_gestures(cx: &mut gpui::TestAppContext) {
             );
         }
         let b = this.bounds.borrow();
-        assert_eq!(b["filter"].top(), main.center().y + crate::settings::z(20.)); // The caption sits above content.
+        assert_eq!(b["filter"].top(), main.center().y); // No extra tile caption above the pane header.
         assert_eq!(b["filter"].bottom_right(), main.bottom_right());
         assert_eq!(trees(this), originals);
     });

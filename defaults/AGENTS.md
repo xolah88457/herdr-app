@@ -306,8 +306,8 @@ In a layout with active-tab content, right-click a space, tab or terminal pane
 and click **Tile space…**, **Tile tab…** or **Tile pane…**. Choose a side or
 corner to place it inline. A space shows its selected tab; a tab places its
 focused pane. Drag a sidebar space, a terminal tab, or the menu’s **Tile** row
-to a content edge or corner. The highlight shows the full destination. Each tile names its space;
-a terminal tile also names its tab. Dropping in the center cancels; dropping on a
+to a content edge or corner. The highlight shows the full destination. The pane header shows the owning space first,
+then the terminal name and folder in brackets, without a second title bar. Dropping in the center cancels; dropping on a
 neighbor in the same list reorders spaces or tabs. Pick
 **Untile workspace** in the placement choices to return to ordinary tabs.
 
