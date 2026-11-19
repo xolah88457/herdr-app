@@ -18,8 +18,17 @@ from pathlib import Path
 from unittest.mock import patch
 
 HELPER = str(Path(__file__).with_name("herdr-tmux").resolve())
-MONITOR = runpy.run_path(HELPER)["Monitor"]
+helper = runpy.run_path(HELPER)
+MONITOR = helper["Monitor"]
 OSC = re.compile(rb"\x1b\]7501;state=([a-z]+):app=pi(?::msg=([A-Za-z0-9+/=]+))?\x1b\\")
+
+
+class ManualLaunchTest(unittest.TestCase):
+    def test_only_foreground_interactive_forms_are_wrapped(self):
+        for args in ([], ['new', '-s', 'test'], ['new-session', '-As', 'test'], ['attach', '-t', 'test']):
+            self.assertTrue(helper['interactive_launch'](args), args)
+        for args in (['new', '-d', '-s', 'test'], ['list-panes'], ['new-window'], ['-L', 'private', 'attach'], ['-C'], ['new', ';', 'detach']):
+            self.assertFalse(helper['interactive_launch'](args), args)
 
 
 class MonitorTest(unittest.TestCase):
