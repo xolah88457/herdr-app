@@ -25,7 +25,7 @@ OSC = re.compile(rb"\x1b\]7501;state=([a-z]+):app=pi(?::msg=([A-Za-z0-9+/=]+))?\
 
 class ManualLaunchTest(unittest.TestCase):
     def test_only_foreground_interactive_forms_are_wrapped(self):
-        for args in ([], ['new', '-s', 'test'], ['new-session', '-As', 'test'], ['attach', '-t', 'test']):
+        for args in ([], ['new', '-s', 'test'], ['new', '-t', 'test'], ['new-session', '-As', 'test'], ['attach', '-t', 'test']):
             self.assertTrue(helper['interactive_launch'](args), args)
         for args in (['new', '-d', '-s', 'test'], ['list-panes'], ['new-window'], ['-L', 'private', 'attach'], ['-C'], ['new', ';', 'detach']):
             self.assertFalse(helper['interactive_launch'](args), args)

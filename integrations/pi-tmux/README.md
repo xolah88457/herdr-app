@@ -11,7 +11,7 @@ export PATH="/absolute/path/to/herdr-app/integrations/pi-tmux:$PATH"
 . /absolute/path/to/herdr-app/integrations/pi-tmux/shell.sh
 ```
 
-Open a **fresh Herdr terminal**, type `tmux new -s test`, then start `pi` inside it. Bare `tmux` and `tmux attach -t test` also work. For an already attached plain client, detach and reattach from the newly configured Herdr shell; do not kill the session. The hook only acts in top-level Herdr shells. Detached launches, management commands, and other flags run ordinary tmux; for private sockets use the explicit helper below. Remove the startup lines and open a new shell to undo it.
+Open a **fresh Herdr terminal**, type `tmux new -s test`, then start `pi` inside it. Bare `tmux`, `tmux new -t test` (create a grouped session), and `tmux attach -t SESSION` also work. With `new -t`, tmux assigns the session name, for example `test-0`; use the actual name from `tmux ls` to reattach. For an already attached plain client, detach and reattach from the newly configured Herdr shell; do not kill the session. The hook only acts in top-level Herdr shells. Detached launches, management commands, and other flags run ordinary tmux; for private sockets use the explicit helper below. Remove the startup lines and open a new shell to undo it.
 
 A Pi confirmation should show **Needs you while the prompt is open**. Answering it restores the previous activity; an idle test prompt does not start a new task after Yes. tmux extended-key settings are unrelated to status reporting.
 

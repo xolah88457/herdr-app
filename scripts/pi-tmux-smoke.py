@@ -7,7 +7,6 @@ Node runtime if Pi needs it). No install, desktop, or provider needed.
 
 import json
 import os
-from pathlib import Path
 import re
 import shlex
 import shutil
@@ -15,7 +14,7 @@ import subprocess
 import sys
 import tempfile
 import time
-
+from pathlib import Path
 
 PROMPT = """export default function (pi) {
   pi.registerCommand("smoke-prompt", {
@@ -183,23 +182,24 @@ def smoke(root, bins, integration):
         hc("run", "--json", "--bg", "--no-parent", "--name", "manual", "--",
            "/usr/bin/env", f"PATH={integration}:{env['PATH']}", f"TMUX_TMPDIR={tmp}",
            "/bin/bash", "--noprofile", "--rcfile", str(integration / "shell.sh"), "-i")
-        hc("send", "manual", "tmux new -s test")
+        hc("send", "manual", "tmux new -t test")
 
         def manual_clients():
-            return manual_tmux("list-clients", "-t", "test", "-F", "#{client_name}", check=False)
+            return manual_tmux("list-clients", "-F", "#{client_session}", check=False)
 
         until("manual tmux client attached", manual_clients, lambda value: len(value.splitlines()) == 1)
+        target = manual_clients().strip() + ":"  # -t names the group, not the client session.
         hc("send", "manual", pi)
         observe("manual", "manually launched Pi", "idle")
         hc("send", "manual", "/smoke-prompt confirm")
-        until("visible manual confirm", lambda: manual_tmux("capture-pane", "-p", "-t", "test:"),
+        until("visible manual confirm", lambda: manual_tmux("capture-pane", "-p", "-t", target),
               lambda text: "Smoke confirm" in text)
         observe("manual", "manual confirm open", "blocked")
         hc("keys", "manual", "enter")
         observe("manual", "manual confirm answered", "idle")
         hc("keys", "manual", "ctrl+b", "d")
         until("manual client detached from live session",
-              lambda: manual_tmux("display-message", "-p", "-t", "test:", "#{session_attached}"),
+              lambda: manual_tmux("display-message", "-p", "-t", target, "#{session_attached}"),
               lambda value: value == "0")
         observe("manual", "back in outer shell after detach", None)
     finally:

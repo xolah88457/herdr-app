@@ -243,7 +243,7 @@ def interactive_launch(args):
         return True
     cmd, *rest = args
     if cmd in ("new", "new-session"):
-        return not rest or (len(rest) == 2 and rest[0] in ("-s", "-As")) or (len(rest) == 3 and rest[:2] == ["-A", "-s"])
+        return not rest or (len(rest) == 2 and rest[0] in ("-s", "-t", "-As")) or (len(rest) == 3 and rest[:2] == ["-A", "-s"])
     if cmd in ("attach", "attach-session", "a", "at"):
         return not rest or (len(rest) == 2 and rest[0] == "-t")
     return False
