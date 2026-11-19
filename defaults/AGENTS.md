@@ -302,6 +302,19 @@ Properties any node can have:
   with `closeOverlay(props().overlay)`.
 - Colors are theme names (`border`, `accent`, `surface`, ...) or `#rrggbb[aa]`.
 
+In a layout with active-tab content, right-click a space, tab or terminal pane
+and click **Tile space…**, **Tile tab…** or **Tile pane…**. Choose a side or
+corner to place it inline. A space shows its selected tab; a tab places its
+focused pane. Alternatively, drag the menu’s **Tile** row to a content edge or
+corner. Dragging directly between sidebar rows still reorders spaces. Pick
+**Untile workspace** in the placement choices to return to ordinary tabs.
+
+The shipped pane and tab menus also offer **Floating session view…** for terminal panes.
+The `session-tiles` mod places live terminal views from the current space in
+halves or corners, even across tabs. Closing the view leaves the source tabs,
+split panes, and processes intact. This is not a change to the shared layout.
+Programs handling right-clicks still allow the menu with Shift+right-click.
+
 A personal terminal menu replaces the whole menu; it doesn't merge items.
 Create `mods/my-menu/main.js` and `mod.json` (e.g.
 `{"place":"none","overlay":{"width":280,"height":100}}`), then set the layout root's

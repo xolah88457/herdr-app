@@ -72,6 +72,12 @@ For [Entwurf](https://github.com/junghan0611/entwurf), use the **+** menu in a l
 
 These are desktop integrations, not installs of the original Herdr TUI plugins. [Automatic naming](https://github.com/qu8n/herdr-automatic-rename) needs no shell hook. Entwurf’s tmux workflow avoids the legacy Herdr API; upstream [does not certify the macOS harness rails](https://github.com/junghan0611/entwurf/blob/main/docs/setup-clean-host.md). Neither external tool is bundled.
 
+### Tile sessions
+
+With one space open, right-click a different space in the sidebar and choose **Tile space…**, then **Right**. Both spaces appear in the main workspace. For sessions from different tabs, right-click the other tab and use **Tile tab…**. A tab placement uses its focused terminal; a space placement shows its selected tab including its splits and mod panes. If a terminal handles right-clicks, use **Shift+right-click** for the pane menu.
+
+Choose a half or corner, or drag the menu’s **Tile** row onto the corresponding workspace edge or corner. Use **Untile workspace** in the placement menu to return without moving panes, merging tabs, or stopping programs. Dragging the sidebar row itself still reorders spaces. **Floating session view…** is a separate, optional window.
+
 ## Work on another machine
 
 Add an SSH machine from Settings → Machines or the sidebar's Add machine action.

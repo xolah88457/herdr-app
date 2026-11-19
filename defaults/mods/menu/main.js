@@ -21,8 +21,13 @@ async function checkout(folder, on) {
   return common.stdout.trim() === `${top.stdout.trim()}/.git` ? "main" : "linked";
 }
 
-function items(p, git) {
-  p = p ?? {};
+// Keep the clicked pane as the target even if another tab has keyboard focus.
+function tileItem(pane) {
+  return pane?.terminal ? [["Floating session view…", "session-tiles", { pane: pane.pane }]] : [];
+}
+
+function items(input, git) {
+  const p = input ?? {};
   const tg = p.target ?? {};
   switch (p.tab) {
     case "pane": {
@@ -34,13 +39,14 @@ function items(p, git) {
       const toProgram = term?.labels?.["herdr.right-click"] === "program";
       // A terminal shown outside a tab (a layout terminal block, a window) has
       // no pane to split, zoom or close: its pane is the block's id.
-      const inTab = panes().some((pane) => pane.pane === tg.pane);
+      const inTab = panes().find((pane) => pane.pane === tg.pane);
       return [
         ...(inTab
           ? [
               ["Rename", "pane.rename", { pane: tg.pane }],
               ["Split right", "pane.split", { direction: "right", pane: tg.pane }],
               ["Split down", "pane.split", { direction: "down", pane: tg.pane }],
+              ...tileItem(inTab),
               ["Zoom", "pane.zoom", { pane: tg.pane }],
             ]
           : []),
@@ -55,12 +61,15 @@ function items(p, git) {
         ...(inTab ? [["Close pane", "pane.close", { pane: tg.pane }]] : []),
       ];
     }
-    case "tab":
+    case "tab": {
+      const sessions = panes().filter(pane => pane.tab === tg.id && pane.terminal);
       return [
+        ...tileItem(sessions.find(pane => pane.focused) ?? sessions[0]),
         ["Rename", "tab.rename", { id: tg.id }],
         ["New tab", "tab.new", { space: tg.space }],
         ["Close", "tab.close", { id: tg.id }],
       ];
+    }
     case "space":
       return [
         ["Rename", "space.rename", { id: tg.id }],
@@ -81,7 +90,14 @@ function items(p, git) {
 }
 
 function menuIcon(command, args) {
-  const name = command.endsWith(".close") ? "x" : command.endsWith(".rename") ? "square-pen" : command.endsWith(".new") ? "plus" : command === "worktree" ? "git-branch" : command === "app.help" ? "terminal" : command === "app.theme" ? "settings" : command === "pane.split" ? (args?.direction === "down" ? "panel-bottom" : "panel-right") : command === "pane.zoom" ? "square" : "terminal";
+  let name = "terminal";
+  if (command.endsWith(".close")) name = "x";
+  else if (command.endsWith(".rename")) name = "square-pen";
+  else if (command.endsWith(".new")) name = "plus";
+  else if (command === "worktree") name = "git-branch";
+  else if (command === "app.theme") name = "settings";
+  else if (command === "pane.split") name = args?.direction === "down" ? "panel-bottom" : "panel-right";
+  else if (command === "pane.zoom") name = "square";
   return `mods/workspace-chrome/${name}.svg`;
 }
 
@@ -109,15 +125,15 @@ export default class Menu extends View {
       });
   }
 
-  choose(i, cx) {
-    const it = items(props(), this.git)[i];
+  choose(it) {
     if (!it) return;
     closeOverlay(props()?.overlay);
     if (it[1] === "worktree") openOverlay({ mod: "worktree", kind: "dialog", ...(it[2].action === "open" ? { width: 560, height: 480 } : { width: 440, height: 260 }), props: it[2] });
+    else if (it[1] === "session-tiles") openOverlay({ mod: "session-tiles", kind: "dialog", width: 480, height: 400, props: it[2] });
     else run(it[1], it[2]);
   }
 
-  render(cx) {
+  render() {
     const t = theme();
     const list = items(props(), this.git);
     return v_flex()
@@ -131,7 +147,7 @@ export default class Menu extends View {
       .on_key_down((e, cx) => {
         if (e.key === "down") this.at = (this.at + 1) % list.length;
         else if (e.key === "up") this.at = (this.at + list.length - 1) % list.length;
-        else if (e.key === "enter") this.choose(this.at, cx);
+        else if (e.key === "enter") this.choose(list[this.at]);
         else if (e.key === "escape") closeOverlay(props().overlay);
         else return;
         cx.notify();
@@ -151,7 +167,7 @@ export default class Menu extends View {
             .text_color(t.foreground)
             .when(i === this.at, (el) => el.bg(t.selected))
             .hover((s) => s.bg(t.hover))
-            .on_click((_e, cx) => this.choose(i, cx))
+            .on_click(() => this.choose(it))
             .child(svg(menuIcon(it[1], it[2])).size(14).flex_none().text_color(t.muted))
             .child(div().flex_1().child(it[0]))
             .child(div().text_size(11).text_color(t.dim).child(shortcut(it[1], it[2])))),
