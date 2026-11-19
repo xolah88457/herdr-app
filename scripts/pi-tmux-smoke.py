@@ -7,7 +7,6 @@ Node runtime if Pi needs it). No install, desktop, or provider needed.
 
 import json
 import os
-from pathlib import Path
 import re
 import shlex
 import shutil
@@ -15,7 +14,7 @@ import subprocess
 import sys
 import tempfile
 import time
-
+from pathlib import Path
 
 PROMPT = """export default function (pi) {
   pi.registerCommand("smoke-prompt", {
@@ -81,6 +80,10 @@ def smoke(root, bins, integration):
 
     def tmux(*args, **kwargs):
         return run(bins["tmux"], "-f", "/dev/null", "-S", socket, *args, **kwargs)
+
+    def manual_tmux(*args, **kwargs):
+        socket = tmp / f"tmux-{os.getuid()}" / "default"
+        return run(bins["tmux"], "-N", "-S", str(socket), *args, **kwargs)
 
     def get(name):
         return json.loads(hc("get", "--json", name))
@@ -172,8 +175,36 @@ def smoke(root, bins, integration):
         hc("keys", "second", "ctrl+d")
         until("Pi shutdown removed its pane option", option, lambda value: value == "")
         observe("second", "Pi exited, wrapper still attached", None)
+
+        # Exercise shell startup, not the explicit wrapper/attach path above.
+        # TMUX_TMPDIR gives even a plain `tmux new` a private default socket.
+        (home / ".tmux.conf").write_text("set -g default-command '/bin/sh -i'\n")
+        hc("run", "--json", "--bg", "--no-parent", "--name", "manual", "--",
+           "/usr/bin/env", f"PATH={integration}:{env['PATH']}", f"TMUX_TMPDIR={tmp}",
+           "/bin/bash", "--noprofile", "--rcfile", str(integration / "shell.sh"), "-i")
+        hc("send", "manual", "tmux new -t test")
+
+        def manual_clients():
+            return manual_tmux("list-clients", "-F", "#{client_session}", check=False)
+
+        until("manual tmux client attached", manual_clients, lambda value: len(value.splitlines()) == 1)
+        target = manual_clients().strip() + ":"  # -t names the group, not the client session.
+        hc("send", "manual", pi)
+        observe("manual", "manually launched Pi", "idle")
+        hc("send", "manual", "/smoke-prompt confirm")
+        until("visible manual confirm", lambda: manual_tmux("capture-pane", "-p", "-t", target),
+              lambda text: "Smoke confirm" in text)
+        observe("manual", "manual confirm open", "blocked")
+        hc("keys", "manual", "enter")
+        observe("manual", "manual confirm answered", "idle")
+        hc("keys", "manual", "ctrl+b", "d")
+        until("manual client detached from live session",
+              lambda: manual_tmux("display-message", "-p", "-t", target, "#{session_attached}"),
+              lambda value: value == "0")
+        observe("manual", "back in outer shell after detach", None)
     finally:
         # Every cleanup command targets only this run's private sockets.
+        manual_tmux("kill-server", check=False)
         tmux("kill-server", check=False)
         if (root / "hc.sock").exists():
             hc("server", "stop")
@@ -181,7 +212,7 @@ def smoke(root, bins, integration):
 
 def main():
     integration = Path(__file__).resolve().parents[1] / "integrations" / "pi-tmux"
-    for name in ("herdr-status.ts", "herdr-tmux"):
+    for name in ("herdr-status.ts", "herdr-tmux", "shell.sh"):
         if not (integration / name).is_file():
             raise RuntimeError(f"missing integration: {integration / name}")
     bins = {}

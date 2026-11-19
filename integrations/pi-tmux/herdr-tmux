@@ -164,7 +164,7 @@ def child_stopped(child):
         return False
 
 
-def attach(tmux, env, session):
+def watch_client(argv, tmux, env):
     saved = termios.tcgetattr(0)
     # A separate file description keeps status writes bounded without making
     # tmux's inherited stdin/stdout nonblocking.
@@ -191,7 +191,7 @@ def attach(tmux, env, session):
         # tmux owns job control (including prefix-z) and gets SIGWINCH and
         # input directly. Stay in its foreground process group, without a relay.
         handlers[signal.SIGTSTP] = signal.signal(signal.SIGTSTP, signal.SIG_IGN)
-        child = subprocess.Popen(tmux + ["attach-session", "-E", "-t", session], env=env)
+        child = subprocess.Popen(argv, env=env)
         monitor = Monitor(tmux, env)
         last = None
         while stop is None and child.poll() is None:
@@ -237,7 +237,27 @@ def attach(tmux, env, session):
                 signal.signal(sig, handler)
 
 
+def interactive_launch(args):
+    """Only wrap ordinary foreground creates/attaches; pass all other tmux syntax through."""
+    if not args:
+        return True
+    cmd, *rest = args
+    if cmd in ("new", "new-session"):
+        return not rest or (len(rest) == 2 and rest[0] in ("-s", "-t", "-As")) or (len(rest) == 3 and rest[:2] == ["-A", "-s"])
+    if cmd in ("attach", "attach-session", "a", "at"):
+        return not rest or (len(rest) == 2 and rest[0] == "-t")
+    return False
+
+
 def main():
+    if sys.argv[1:2] == ["--client"]:
+        args = sys.argv[2:]
+        if (os.environ.get("HC_TERMINAL_ID") and os.environ.get("HC_TERMINAL_SOCKET")
+                and not os.environ.get("TMUX") and os.isatty(0) and os.isatty(1)
+                and os.tcgetpgrp(0) == os.getpgrp() and interactive_launch(args)):
+            return watch_client(["tmux", *args], ["tmux", "-N"], os.environ.copy())
+        os.execvp("tmux", ["tmux", *args])  # Keep flags, status and behavior of unsupported invocations.
+
     parser = argparse.ArgumentParser(description=__doc__)
     socket = parser.add_mutually_exclusive_group()
     socket.add_argument("-L", metavar="name", help="tmux socket name")
@@ -259,7 +279,7 @@ def main():
     try:
         if not (os.isatty(0) and os.isatty(1) and os.tcgetpgrp(0) == os.getpgrp()):
             parser.error("attach requires a foreground terminal")
-        return attach(tmux, env, args.session)
+        return watch_client(tmux + ["attach-session", "-E", "-t", args.session], tmux, env)
     except (OSError, termios.error) as exc:
         print(f"herdr-tmux: {exc}", file=sys.stderr)
         return 1

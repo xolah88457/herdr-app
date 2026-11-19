@@ -2,7 +2,20 @@
 
 Pi reports its own state when launched directly in Herdr. A tmux client normally doesn't forward those reports. This optional integration keeps Pi in the **existing tmux session** and makes that session visible as one terminal in Herdr’s Agents panel. Nothing is installed automatically. No provider, tmux plugin, `allow-passthrough`, or global tmux setting is needed.
 
-## Try it on one session
+## Start tmux yourself in a new Herdr space
+
+For Bash or Zsh, enable the Pi extension (`herdr-status.ts` under Pi’s `extensions/` directory) and add these lines to your interactive shell startup file (`~/.bashrc` or `~/.zshrc`), substituting your checkout path:
+
+```sh
+export PATH="/absolute/path/to/herdr-app/integrations/pi-tmux:$PATH"
+. /absolute/path/to/herdr-app/integrations/pi-tmux/shell.sh
+```
+
+Open a **fresh Herdr terminal**, type `tmux new -s test`, then start `pi` inside it. Bare `tmux`, `tmux new -t test` (create a grouped session), and `tmux attach -t SESSION` also work. With `new -t`, tmux assigns the session name, for example `test-0`; use the actual name from `tmux ls` to reattach. For an already attached plain client, detach and reattach from the newly configured Herdr shell; do not kill the session. The hook only acts in top-level Herdr shells. Detached launches, management commands, and other flags run ordinary tmux; for private sockets use the explicit helper below. Remove the startup lines and open a new shell to undo it.
+
+A Pi confirmation should show **Needs you while the prompt is open**. Answering it restores the previous activity; an idle test prompt does not start a new task after Yes. tmux extended-key settings are unrelated to status reporting.
+
+## Attach explicitly instead
 
 Use macOS or Linux with Python 3.8+ and interactive Pi. The integration was tested on macOS with Pi 1.5.2, tmux 3.8, and hc 0.1.21. Both sides must run on the machine that owns the tmux socket.
 
