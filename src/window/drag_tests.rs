@@ -240,7 +240,31 @@ fn workspace_row_gestures(cx: &mut gpui::TestAppContext) {
     drag(cx, space, other_space);
     // The selected tab is now first and has a close button, so the second starts farther right.
     drag(cx, tab, other_tab + point(px(20.), px(0.)));
-    drag(cx, space, right);
+    // The hot zones are narrow, but the visible preview must cover the final slot.
+    let left = MouseButton::Left;
+    cx.simulate_mouse_move(space, None, Default::default());
+    cx.simulate_mouse_down(space, left, Default::default());
+    cx.simulate_mouse_move(space + point(px(6.), px(0.)), left, Default::default());
+    draw(cx);
+    let half = size(main.size.width / 2., main.size.height);
+    let corner = size(half.width, half.height / 2.);
+    for (position, expected) in [
+        (point(main.left() + px(8.), main.center().y), Some(gpui::Bounds::new(main.origin, half))),
+        (main.origin + point(px(8.), px(8.)), Some(gpui::Bounds::new(main.origin, corner))),
+        (main.center(), None),
+        (right, Some(gpui::Bounds::new(point(main.center().x, main.top()), half))),
+    ] {
+        cx.simulate_mouse_move(position, left, Default::default());
+        draw(cx);
+        cx.update(|window, _| {
+            let accent = super::c("accent");
+            let previews: Vec<_> = window.painted_quads().into_iter().filter(|q| q.border_color == accent
+                && q.background == gpui::Background::from(accent.opacity(0.22))).map(|q| q.bounds).collect();
+            assert_eq!(previews, expected.map(|b| b.scale(window.scale_factor())).into_iter().collect::<Vec<_>>());
+        });
+    }
+    cx.simulate_mouse_up(right, left, Default::default());
+    draw(cx);
     view.update(cx, |this, _| {
         let roots: Vec<_> = this.workspace_roots().collect();
         for id in ["main-tab", "web-tab"] {
@@ -269,7 +293,7 @@ fn workspace_row_gestures(cx: &mut gpui::TestAppContext) {
             );
         }
         let b = this.bounds.borrow();
-        assert_eq!(b["filter"].top(), main.center().y);
+        assert_eq!(b["filter"].top(), main.center().y + crate::settings::z(20.)); // The caption sits above content.
         assert_eq!(b["filter"].bottom_right(), main.bottom_right());
         assert_eq!(trees(this), originals);
     });

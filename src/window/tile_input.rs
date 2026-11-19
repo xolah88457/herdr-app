@@ -134,19 +134,32 @@ impl AppWindow {
         let mut body = div().relative().size_full().flex().child(content);
         // Outer quarters accept drops: one axis at an edge means a half, both
         // at edges mean a corner. Only TileSource can highlight or accept them.
+        let hovered = std::rc::Rc::new(std::cell::Cell::new(None));
         let bands = [(0., 0.25), (0.25, 0.5), (0.75, 0.25)];
         for (y, row) in POSITIONS.iter().enumerate() {
             for (x, position) in row.iter().enumerate() {
                 let Some((placement, _)) = *position else { continue };
+                let hover = hovered.clone();
                 body = body.child(div().absolute().left(relative(bands[x].0)).w(relative(bands[x].1))
                     .top(relative(bands[y].0)).h(relative(bands[y].1))
-                    .drag_over::<TileSource>(|s, _, _, _| s.bg(c("accent").opacity(0.22)).border_2().border_color(c("accent")))
+                    .drag_over::<TileSource>(move |s, source, window, _| {
+                        if source.window.is_none_or(|id| id == window.window_handle().window_id()) {
+                            hover.set(workspace_tiles::Slot::parse(placement));
+                        }
+                        s
+                    })
                     .on_drop(cx.listener(move |this, source: &TileSource, window, cx| {
                         this.apply_tile(source, placement, window, cx);
                     })));
             }
         }
-        body.into_any_element()
+        // Paint last, without a hitbox: the full preview never obscures the corner targets.
+        body.child(canvas(|_, _, _| (), move |area, _, window, _| {
+            if let Some(slot) = hovered.take() {
+                let accent = c("accent");
+                window.paint_quad(quad(slot.bounds(area), px(0.), accent.opacity(0.22), px(2.), accent, BorderStyle::Solid));
+            }
+        }).absolute().inset_0()).into_any_element()
     }
 }
 
