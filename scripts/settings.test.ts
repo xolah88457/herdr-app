@@ -5,7 +5,11 @@ import { readFile } from "node:fs/promises";
 const source = await readFile(new URL("../defaults/frame/settings/main.js", import.meta.url), "utf8");
 // settings.json as the mod sees it through readTextFile / writeTextFile.
 const disk: { raw: string | null; writes: number; fail?: string; readFail?: string; toasts: any[] } = { raw: null, writes: 0, toasts: [] };
+const preferences = new Map<string, unknown>();
 const values: Record<string, any> = {
+  shared: (key: string) => preferences.get(key),
+  setShared: (key: string, value: unknown) => preferences.set(key, value),
+  v_flex: () => ({ w_full() { return this; }, child() { return this; } }),
   View: class {},
   appHome: () => "/home",
   notify: (n: any) => { disk.toasts.push(n); },
@@ -34,6 +38,21 @@ async function change(raw: string | null, edit: (q: Record<string, any>) => void
   await finished;
   return { view, toasts: disk.toasts };
 }
+
+test("Pi subagents defaults to Herdr and the switch persists across Settings views", () => {
+  preferences.clear();
+  for (const expected of [false, true, false]) {
+    const view = new Settings();
+    view.heading = view.row = () => null;
+    view.toggle = (_t: unknown, id: string, on: boolean, click: () => void) => {
+      expect(id).toBe("st-pi-tmux");
+      expect(on).toBe(expected);
+      click();
+      expect(preferences.get("pi-subagents.tmux")).toBe(!expected);
+    };
+    view.pi({});
+  }
+});
 
 test("a change writes settings.json, keeping what else it holds", async () => {
   const { view, toasts } = await change('{"font_size": 15}', (q) => (q.dock_bounce = true));

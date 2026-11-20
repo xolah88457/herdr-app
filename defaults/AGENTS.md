@@ -197,6 +197,8 @@ The `taskboard` mod reads `tsk list --json` in the space's folder on its
 machine (Git project, or tsk's Desk outside Git). **Refresh** rereads the
 board; **Open tsk** starts the upstream TUI there to edit it. Install `tsk`
 on that machine; Herdr does not install or maintain a second task store.
+For **+ > Pi subagents**, Settings > Pi subagents > Use tmux selects the extension for new sessions. Off (default) opens workers in native Herdr splits; on opens them in tmux panes. Both variants expose the same Pi tools: use the one already loaded, never load both. Prepare the optional extension copy first (see `integrations/pi-native-panes/README.md`). This preference does not change plain `pi`, Entwurf or existing sessions.
+
 The + menu on local macOS/Linux spaces can launch `entwurf pi` in tmux.
 **Set up Entwurf for Pi…** confirms before running `entwurf install` in the
 focused terminal's folder. This updates Pi registration; opening the menu or

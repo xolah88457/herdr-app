@@ -33,6 +33,11 @@ def prepare(source, dest):
         subprocess.run(['patch', '-f', '-F', '0', '-p1', '-i', str(patch)], cwd=dest, check=True)
         for adapter in sorted(HERE.glob('native*.ts')):
             shutil.copy2(adapter, dest / ENTRY.parent / adapter.name)
+        for name in ['orchestrator', 'pi-native', 'VARIANTS.md']:
+            shutil.copy2(HERE / name, dest / name)
+        for name in ['herdr-tmux', 'herdr-status.ts']:
+            shutil.copy2(HERE.parent / 'pi-tmux' / name, dest / name)
+        (dest / 'tmux-entry').write_text(str(source / ENTRY) + '\n')
         (dest / '.herdr-native-copy').write_text('Opt-in native pane transport.\n')
     except BaseException:
         shutil.rmtree(dest)

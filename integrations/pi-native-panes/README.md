@@ -2,6 +2,12 @@
 
 This opt-in adapter targets the `pi-interactive-subagents-merged` package (`3.8.0-merged.1`). It does not modify Herdr, the installed Pi package, or the tmux integration. `prepare-copy` copies extension sources and bundled agent definitions to a new directory and patches only the copy. No install, credentials, dependency tree, or settings file is copied.
 
+## Use the Herdr setting
+
+From this directory, run `./prepare-copy /path/to/pi-merged "${HERDR_APP_HOME:-$HOME/.config/herdr-app}/pi-subagents"` once. Use a new destination; an older standalone copy is not replaced. In local macOS/Linux spaces choose **+ > Pi subagents**. **Settings > Pi subagents > Use tmux** is off by default. When on, new sessions use the original extension inside a private tmux server and attach via Herdr's existing status bridge. Keep the original extension at its source path. Both modes load only the selected subagent extension, include [the orchestrator guide](VARIANTS.md), and explicitly load the CLIProxyAPI provider if present. Existing sessions, plain `pi`, and the Entwurf preset are unchanged.
+
+## Standalone native launcher
+
 From this integration directory:
 
 ```sh

@@ -109,7 +109,7 @@ def smoke(root, args, provider):
     env = {
         "PATH": f"{wrappers}:{os.environ.get('PATH', os.defpath)}",
         "HOME": str(home), "SHELL": "/bin/sh", "TERM": "xterm-256color",
-        "TMPDIR": str(tmp), "HC_SESSION": root.name, "HC_SOCKET": str(root / "hc.sock"),
+        "TMUX_TMPDIR": str(tmp), "TMPDIR": str(tmp), "HC_SESSION": root.name, "HC_SOCKET": str(root / "hc.sock"),
         "HERDR_APP_HOME": str(app_home), "HERDR_TELEMETRY": "0",
         "PI_CODING_AGENT_DIR": str(agent), "PI_OFFLINE": "1",
     }
@@ -206,7 +206,7 @@ def smoke(root, args, provider):
         await_value("Herdr initial layout", lambda: app("ls"))
         app("do", "space.new", json.dumps({"name": "Smoke", "folder": str(work)}))
         parent_space, parent_tab, parent = open_tab(
-            "smoke-parent", str(integration / "pi-native"), str(package),
+            "smoke-parent", str(package / "orchestrator"), args.backend,
             "--session", str(parent_session), "--model", MODEL, "--thinking", "off",
             "--no-approve", "--no-mcp", "--no-skills", "--no-context-files", "--no-builtin-tools",
         )
@@ -220,15 +220,20 @@ def smoke(root, args, provider):
         if not provider[1].wait(20):
             raise RuntimeError("real child Pi did not reach the loopback model")
         # The child remains blocked in the loopback provider until its live pane is observed.
-        child_space, child_tab, child = await_value("live child pane", lambda: new_child(baseline))
-        child_address = child["terminal"]
-        child_record = json.loads(hc("get", "--json", child_address))
-        if ((child_space["id"], child_tab["id"]) != (parent_space["id"], parent_tab["id"])
-                or child_address == parent_address or child["pane"] == parent["pane"]
-                or child_record["state"] != "live"):
-            raise RuntimeError(f"wrong child terminal or placement: {child}, {child_record}")
-        print(f"parent {parent_address} pane={parent['pane']}; child {child_address} "
-              f"pane={child['pane']}; same tab={parent_tab['id']} (decoy={decoy_tab['id']})", flush=True)
+        if args.backend == "tmux":
+            socket, = (tmp / f"tmux-{os.getuid()}").glob("herdr-pi-*")
+            def mux_panes():
+                return run("tmux", "-S", str(socket), "list-panes", "-a", "-F", "#{pane_id}").splitlines()
+            if len(mux_panes()) != 2 or set(places()) != baseline:
+                raise RuntimeError("tmux worker must be a second inner pane, not a Herdr split")
+        else:
+            child_space, child_tab, child = await_value("live child pane", lambda: new_child(baseline))
+            child_address = child["terminal"]
+            child_record = json.loads(hc("get", "--json", child_address))
+            if ((child_space["id"], child_tab["id"]) != (parent_space["id"], parent_tab["id"])
+                    or child_address == parent_address or child["pane"] == parent["pane"]
+                    or child_record["state"] != "live"):
+                raise RuntimeError(f"wrong child terminal or placement: {child}, {child_record}")
         provider[2].set()
 
         def delivered():
@@ -254,6 +259,10 @@ def smoke(root, args, provider):
             current = places()
             return child_address not in current and current.get(parent_address, ({}, {}, {}))[2].get("pane") == parent["pane"]
 
+        if args.backend == "tmux":
+            await_value("tmux worker pane closed", lambda: len(mux_panes()) == 1)
+            print(f"parent received {SUMMARY!r}, exit=0; tmux worker closed", flush=True)
+            return
         await_value("child pane removed; parent pane intact", pane_cleaned)
         def no_live_child():
             record = hc("get", "--json", child_address, check=False)
@@ -276,6 +285,8 @@ def smoke(root, args, provider):
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait()
+        for socket in (tmp / f"tmux-{os.getuid()}").glob("herdr-pi-*"):
+            run("tmux", "-S", str(socket), "kill-server", check=False)
         if (root / "hc.sock").is_socket():
             hc("server", "stop")
 
@@ -284,6 +295,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path, help="source package passed to prepare-copy")
     parser.add_argument("--herdr-app", required=True, help="standalone Herdr executable, not an installed app bundle")
+    parser.add_argument("--backend", choices=["native", "tmux"], default="native")
     parser.add_argument("--hc", default="hc")
     parser.add_argument("--pi", default="pi")
     args = parser.parse_args()

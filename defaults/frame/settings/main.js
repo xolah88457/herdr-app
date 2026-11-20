@@ -2,7 +2,7 @@
 
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, Scrollbar, InputState, Input, Popup } from "gpui-base";
-import { hc, run, theme, themes, fonts, updates, telemetry, settings, layouts, shared, appHome, readTextFile, writeTextFile, playSound, props, closeOverlay, notify, window } from "herdr";
+import { hc, run, theme, themes, fonts, updates, telemetry, settings, layouts, shared, setShared, appHome, readTextFile, writeTextFile, playSound, props, closeOverlay, notify, window } from "herdr";
 
 const I = (name) => `frame/settings/${name}.svg`;
 
@@ -10,6 +10,7 @@ const SECTIONS = [
   { id: "look", title: "Look", icon: "palette" },
   ...(window()?.platform === "macos" ? [{ id: "keyboard", title: "Keyboard", icon: "keyboard" }] : []),
   { id: "machines", title: "Machines", icon: "server" },
+  ...(["macos", "linux"].includes(window()?.platform) ? [{ id: "pi", title: "Pi subagents", icon: "server" }] : []),
   { id: "alerts", title: "Alerts", icon: "bell" },
   { id: "updates", title: "Updates", icon: "refresh" },
   { id: "privacy", title: "Privacy", icon: "shield" },
@@ -320,7 +321,7 @@ export default class Settings extends View {
       );
   }
 
-  appearancePicker(t, cx) {
+  appearancePicker(t) {
     const now = this.person.appearance ?? null;
     return h_flex()
       .p(2)
@@ -519,7 +520,7 @@ export default class Settings extends View {
       .child(this.layoutPicker(t, cx))
       .child(div().h(18))
       .child(this.heading(t, "Theme"))
-      .child(this.row(t, "Appearance", "Light or dark, or as your system is now.", this.appearancePicker(t, cx)))
+      .child(this.row(t, "Appearance", "Light or dark, or as your system is now.", this.appearancePicker(t)))
       .child(div().pt(12).pb(8).text_size(12.5).text_color(t.dim).child("For the layout you're in: each layout keeps its own light and dark theme."))
       .child(div().pb(6).text_size(12.5).font_medium().text_color(t.muted).child("Dark"))
       .child(this.themePicker(t, false))
@@ -736,6 +737,13 @@ export default class Settings extends View {
   }
 
   // Alerts ---------------------------------------------------------------
+
+  pi(t) {
+    const on = shared("pi-subagents.tmux") === true;
+    return v_flex().w_full().child(this.heading(t, "Pi subagents"))
+      .child(this.row(t, "Use tmux", "Applies to new local + menu → Pi subagents sessions. Off uses native Herdr splits; on uses tmux panes. Running sessions stay as they are.",
+        this.toggle(t, "st-pi-tmux", on, () => setShared("pi-subagents.tmux", !on))));
+  }
 
   alerts(t) {
     const sounds = this.person.sounds ?? {};
@@ -973,17 +981,7 @@ export default class Settings extends View {
                   .px(28)
                   .py(22)
                   .child(
-                    this.section === "look"
-                      ? this.look(t, cx)
-                      : this.section === "keyboard"
-                        ? this.keyboard(t)
-                      : this.section === "machines"
-                        ? this.machines(t)
-                      : this.section === "alerts"
-                        ? this.alerts(t)
-                        : this.section === "privacy"
-                          ? this.privacy(t)
-                          : this.updates(t),
+                    this[this.section](t, cx),
                   ),
               ),
           )
