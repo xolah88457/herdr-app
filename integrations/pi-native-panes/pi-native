@@ -1,0 +1,12 @@
+#!/bin/sh
+# Start just this Pi session with the copied extension, never both backends.
+set -eu
+if [ "$#" -lt 1 ]; then echo 'Usage: pi-native PREPARED_COPY [pi options...]' >&2; exit 2; fi
+copy=$(CDPATH='' cd -- "$1" && pwd -P)
+shift
+entry=$copy/pi-extension/subagents/index.ts
+[ -f "$copy/.herdr-native-copy" ] && [ -f "$entry" ] || { echo 'Run prepare-copy first.' >&2; exit 2; }
+[ -n "${HC_TERMINAL_ID:-}" ] && [ -z "${TMUX:-}" ] || { echo 'Open a native local Herdr terminal (not tmux), then run pi-native there.' >&2; exit 2; }
+: "${HERDR_APP_HOME:=$HOME/.config/herdr-app}"
+export HERDR_APP_HOME
+exec pi --no-extensions --extension "$entry" "$@"
