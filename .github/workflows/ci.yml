@@ -126,6 +126,12 @@ jobs:
       - name: Install Bun
         if: matrix.platform == 'linux-x86_64'
         run: curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4"
+      - name: Mod and Pi integration tests
+        if: matrix.platform == 'linux-x86_64'
+        run: |
+          sudo apt-get install -y tmux
+          ~/.bun/bin/bun test scripts/changes.test.ts scripts/files.test.ts scripts/machine-add.test.ts scripts/picker.test.ts scripts/palette.test.ts scripts/agents.test.ts scripts/spaces.test.ts scripts/mod-storage.test.ts scripts/worktree.test.ts scripts/settings.test.ts scripts/tabs.test.ts scripts/taskboard.test.ts scripts/new-menu.test.ts scripts/pi-tmux-publisher.test.ts
+          python3 -m unittest integrations/pi-tmux/test_herdr_tmux.py
       - name: Check documentation
         if: matrix.platform == 'linux-x86_64'
         run: |
