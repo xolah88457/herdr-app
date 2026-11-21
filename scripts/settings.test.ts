@@ -8,6 +8,7 @@ const disk: { raw: string | null; writes: number; fail?: string; readFail?: stri
 const preferences = new Map<string, unknown>();
 const namedThemes = [
   { name: "atom-one-dark", light: false, colors: {} },
+  { name: "atom-one-light", light: true, colors: {} },
   { name: "My personal theme", light: true, colors: {} },
 ];
 const commands: unknown[][] = [];
@@ -111,14 +112,14 @@ test("Look offers an independent terminal theme and saves selections from the pi
   const click = (key: string) => look().find(key)!.click!(null, cx);
   const trigger = "st-terminal-theme";
   expect(look().text()).toContain("Terminal theme");
-  expect(look().find(trigger)!.text()).toContain("Atom One Light");
+  expect(look().find(trigger)!.text()).toContain("Follow Herdr");
   expect(disk.writes).toBe(0);
 
   for (const [name, label] of [
     ["My personal theme", "My personal theme"],
     ["atom-one-dark", "atom-one-dark"],
     ["follow", "Follow Herdr"],
-    ["atom-one-light", "Atom One Light"],
+    ["atom-one-light", "atom-one-light"],
   ]) {
     click(trigger);
     const option = `st-terminal-theme-option-${name}`;
@@ -127,12 +128,22 @@ test("Look offers an independent terminal theme and saves selections from the pi
     await Promise.all(pending.splice(0));
     expect(look().find(option)).toBeUndefined();
     expect(look().find(trigger)!.text()).toContain(label);
-    expect(JSON.parse(disk.raw!)).toEqual({ ...original, terminal_theme: name });
+    // Follow is the default, so choosing it leaves the key out.
+    expect(JSON.parse(disk.raw!)).toEqual(name === "follow" ? original : { ...original, terminal_theme: name });
   }
 
   expect(disk.writes).toBe(4);
   expect(disk.toasts).toEqual([]);
   expect(commands).toEqual([]);
+});
+
+test("an unknown terminal theme in settings.json shows as Follow Herdr", async () => {
+  Object.assign(disk, { raw: JSON.stringify({ terminal_theme: "deleted-theme" }), writes: 0, fail: undefined, readFail: undefined, toasts: [] });
+  const view = new Settings();
+  view.handle = { focus() {} };
+  view.layoutPicker = () => element();
+  await view.load();
+  expect(view.look({}, { spawn() {}, notify() {} }).find("st-terminal-theme")!.text()).toContain("Follow Herdr");
 });
 
 test("a change writes settings.json, keeping what else it holds", async () => {

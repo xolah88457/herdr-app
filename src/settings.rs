@@ -36,8 +36,8 @@ const GRAPHITE: Palette = Palette {
     cursor: None,
     status: DARK_STATUS,
     ansi: [
-        0x45484f, 0xdc8c95, 0xa6bd91, 0xd8be87, 0x96b2d7, 0xb5a2ce, 0x8cbdc3, 0xd2d4d9, 0x818793,
-        0xf0a5ad, 0xbad5a2, 0xead2a1, 0xb0cbef, 0xcbb7e6, 0xa4d5db, 0xf0f0f2,
+        0x45484f, 0xdc8c95, 0xa6bd91, 0xd8be87, 0x96b2d7, 0xb5a2ce, 0x8cbdc3, 0xd2d4d9, 0x818793, 0xf0a5ad, 0xbad5a2, 0xead2a1, 0xb0cbef,
+        0xcbb7e6, 0xa4d5db, 0xf0f0f2,
     ],
 };
 const INK: Palette = Palette {
@@ -47,8 +47,8 @@ const INK: Palette = Palette {
     cursor: None,
     status: DARK_STATUS,
     ansi: [
-        0x414b5a, 0xe58c9a, 0x89c5aa, 0xd9be82, 0x91b6ee, 0xb9a0e2, 0x85c4d0, 0xcdd6e4, 0x7f91a7,
-        0xf5a5b2, 0xa5dec3, 0xedd39c, 0xaccbfa, 0xd0b7f4, 0xa0dce5, 0xf0f5fc,
+        0x414b5a, 0xe58c9a, 0x89c5aa, 0xd9be82, 0x91b6ee, 0xb9a0e2, 0x85c4d0, 0xcdd6e4, 0x7f91a7, 0xf5a5b2, 0xa5dec3, 0xedd39c, 0xaccbfa,
+        0xd0b7f4, 0xa0dce5, 0xf0f5fc,
     ],
 };
 const MOSS: Palette = Palette {
@@ -58,8 +58,8 @@ const MOSS: Palette = Palette {
     cursor: None,
     status: DARK_STATUS,
     ansi: [
-        0x435248, 0xdf978d, 0xa0c4a2, 0xd4bc8b, 0x99b9cd, 0xbba4c8, 0x8bbdb5, 0xcdd7ce, 0x82968a,
-        0xf1afa3, 0xb8dab9, 0xe9d2a5, 0xb1d0e2, 0xd1bddc, 0xa4d6ca, 0xeff5ee,
+        0x435248, 0xdf978d, 0xa0c4a2, 0xd4bc8b, 0x99b9cd, 0xbba4c8, 0x8bbdb5, 0xcdd7ce, 0x82968a, 0xf1afa3, 0xb8dab9, 0xe9d2a5, 0xb1d0e2,
+        0xd1bddc, 0xa4d6ca, 0xeff5ee,
     ],
 };
 
@@ -72,8 +72,8 @@ const PAPER: Palette = Palette {
     cursor: Some(0x25272c),
     status: Some([0x9a6700, 0xc93c2c, 0x2f6fe4]),
     ansi: [
-        0x25272c, 0xc62a2a, 0x1a7f37, 0x8f5d00, 0x1f62d0, 0x7a45c8, 0x0f6f74, 0x5f6068, 0x7b7e87,
-        0xd1242f, 0x1f883d, 0x9a6700, 0x0969da, 0x8250df, 0x1b7c83, 0x111214,
+        0x25272c, 0xc62a2a, 0x1a7f37, 0x8f5d00, 0x1f62d0, 0x7a45c8, 0x0f6f74, 0x5f6068, 0x7b7e87, 0xd1242f, 0x1f883d, 0x9a6700, 0x0969da,
+        0x8250df, 0x1b7c83, 0x111214,
     ],
 };
 
@@ -93,20 +93,16 @@ fn preset(name: &str) -> Option<&'static Palette> {
     }
 }
 
-const DEFAULT_TERMINAL_THEME: &str = "atom-one-light";
-const ATOM_ONE_LIGHT: &str = include_str!("../defaults/themes/atom-one-light.json");
+/// `terminal_theme` value that gives the terminals the app's own colors.
 const FOLLOW_THEME: &str = "follow";
 
 /// The shipped theme files (defaults/themes), written to `themes/` when missing.
 const THEMES: &[(&str, &str)] = &[
-    (
-        "atom-one-dark",
-        include_str!("../defaults/themes/atom-one-dark.json"),
-    ),
-    (DEFAULT_TERMINAL_THEME, ATOM_ONE_LIGHT),
+    ("atom-one-dark", include_str!("../defaults/themes/atom-one-dark.json")),
+    ("atom-one-light", include_str!("../defaults/themes/atom-one-light.json")),
     ("win98", include_str!("../defaults/themes/win98.json")),
 ];
-pub const SHIPPED_THEMES: &[&str] = &["atom-one-dark", DEFAULT_TERMINAL_THEME, "win98"];
+pub const SHIPPED_THEMES: &[&str] = &["atom-one-dark", "atom-one-light", "win98"];
 
 /// `themes/<name>.json`: a palette, plus `colors` overrides like settings.json's.
 #[derive(Deserialize)]
@@ -127,9 +123,7 @@ fn themes_dir() -> PathBuf {
 
 // Only these exact shipped versions may be replaced; personal themes stay intact.
 const PREVIOUS_THEMES: &[(&str, &str)] = &[
-    (
-        "atom-one-dark",
-        r##"{
+    ("atom-one-dark", r##"{
   "background": "#21252b",
   "foreground": "#abb2bf",
   "selection": "#323844",
@@ -139,11 +133,8 @@ const PREVIOUS_THEMES: &[(&str, &str)] = &[
     "#767676", "#e06c75", "#98c379", "#e5c07b", "#61afef", "#c678dd", "#56b6c2", "#abb2bf"
   ]
 }
-"##,
-    ),
-    (
-        "win98",
-        r##"{
+"##),
+    ("win98", r##"{
   "background": "#ffffff",
   "foreground": "#c0c0c0",
   "selection": "#000080",
@@ -172,8 +163,7 @@ const PREVIOUS_THEMES: &[(&str, &str)] = &[
     "unknown": "#808080"
   }
 }
-"##,
-    ),
+"##),
 ];
 
 pub fn install_themes() {
@@ -185,16 +175,8 @@ pub fn install_themes() {
 }
 
 fn install_theme(path: &std::path::Path, name: &str, text: &str) {
-    let previous = PREVIOUS_THEMES
-        .iter()
-        .find(|(n, _)| *n == name)
-        .map(|(_, s)| *s);
-    if !path.exists()
-        || std::fs::read_to_string(path)
-            .ok()
-            .as_deref()
-            .is_some_and(|s| Some(s) == previous)
-    {
+    let previous = PREVIOUS_THEMES.iter().find(|(n, _)| *n == name).map(|(_, s)| *s);
+    if !path.exists() || std::fs::read_to_string(path).ok().as_deref().is_some_and(|s| Some(s) == previous) {
         let _ = crate::persist::write_atomic(path, text.as_bytes());
     }
 }
@@ -208,31 +190,16 @@ fn palette_in(name: &str, dir: &Path) -> Result<(Palette, BTreeMap<String, Strin
     if let Some(p) = preset(name) {
         return Ok((p.clone(), BTreeMap::new()));
     }
-    match std::fs::read_to_string(dir.join(format!("{name}.json"))) {
-        Ok(text) => parse_theme_file(name, &text),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound && name == DEFAULT_TERMINAL_THEME => {
-            Ok(bundled_terminal_palette())
-        }
-        Err(_) => Err(format!(
-            "theme {name:?} is not one of {} and there is no themes/{name}.json",
-            PRESETS.join(", ")
-        )),
-    }
-}
-
-fn bundled_terminal_palette() -> (Palette, BTreeMap<String, String>) {
-    parse_theme_file(DEFAULT_TERMINAL_THEME, ATOM_ONE_LIGHT).expect("valid bundled terminal theme")
+    let text = std::fs::read_to_string(dir.join(format!("{name}.json")))
+        .map_err(|_| format!("theme {name:?} is not one of {} and there is no themes/{name}.json", PRESETS.join(", ")))?;
+    parse_theme_file(name, &text)
 }
 
 fn parse_theme_file(name: &str, text: &str) -> Result<(Palette, BTreeMap<String, String>), String> {
-    let f: ThemeFile =
-        serde_json::from_str(text).map_err(|e| format!("themes/{name}.json: {e}"))?;
+    let f: ThemeFile = serde_json::from_str(text).map_err(|e| format!("themes/{name}.json: {e}"))?;
     let c = |k: &str, v: &str| {
         let h = v.trim().trim_start_matches('#');
-        (h.len() == 6)
-            .then(|| u32::from_str_radix(h, 16).ok())
-            .flatten()
-            .ok_or(format!("themes/{name}.json: {k} {v:?} is not #rrggbb"))
+        (h.len() == 6).then(|| u32::from_str_radix(h, 16).ok()).flatten().ok_or(format!("themes/{name}.json: {k} {v:?} is not #rrggbb"))
     };
     let mut ansi = [0; 16];
     for (i, v) in f.ansi.iter().enumerate() {
@@ -240,9 +207,7 @@ fn parse_theme_file(name: &str, text: &str) -> Result<(Palette, BTreeMap<String,
     }
     for (k, v) in &f.colors {
         if parse_hex(v).is_none() {
-            return Err(format!(
-                "themes/{name}.json: colors.{k}: {v:?} is not #rrggbb or #rrggbbaa"
-            ));
+            return Err(format!("themes/{name}.json: colors.{k}: {v:?} is not #rrggbb or #rrggbbaa"));
         }
     }
     let cursor = f.cursor.as_deref().map(|v| c("cursor", v)).transpose()?;
@@ -269,9 +234,7 @@ fn shipped_theme_upgrades_preserve_personal_edits() {
         std::fs::write(&path, previous).unwrap();
         install_theme(&path, name, current);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), current);
-        let edited = previous
-            .replace("#abb2bf", "#abcdef")
-            .replace("#c0c0c0", "#abcdef");
+        let edited = previous.replace("#abb2bf", "#abcdef").replace("#c0c0c0", "#abcdef");
         std::fs::write(&path, &edited).unwrap();
         install_theme(&path, name, current);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), edited);
@@ -286,9 +249,7 @@ fn shipped_theme_files() {
     let mut found = std::collections::BTreeSet::new();
     for entry in std::fs::read_dir(folder).unwrap() {
         let path = entry.unwrap().path();
-        if path.extension().and_then(|s| s.to_str()) != Some("json") {
-            continue;
-        }
+        if path.extension().and_then(|s| s.to_str()) != Some("json") { continue; }
         let name = path.file_stem().unwrap().to_str().unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
         parse_theme_file(name, &text).unwrap_or_else(|e| panic!("{e}"));
@@ -296,10 +257,7 @@ fn shipped_theme_files() {
         found.insert(name.to_owned());
     }
     assert_eq!(found, THEMES.iter().map(|(n, _)| n.to_string()).collect());
-    assert_eq!(
-        found,
-        SHIPPED_THEMES.iter().map(|n| n.to_string()).collect()
-    );
+    assert_eq!(found, SHIPPED_THEMES.iter().map(|n| n.to_string()).collect());
 }
 
 /// Whether `name` is a theme that can be shown.
@@ -309,9 +267,7 @@ pub fn theme_exists(name: &str) -> bool {
 
 /// Whether a theme is light (by its background), for picking its half of a pair.
 pub fn theme_is_light(name: &str) -> bool {
-    palette(name)
-        .map(|(p, _)| is_light(p.background))
-        .unwrap_or(false)
+    palette(name).map(|(p, _)| is_light(p.background)).unwrap_or(false)
 }
 
 fn is_light(c: u32) -> bool {
@@ -326,12 +282,7 @@ pub fn themes() -> Vec<(String, Theme)> {
         .into_iter()
         .flatten()
         .flatten()
-        .filter_map(|e| {
-            e.file_name()
-                .to_str()?
-                .strip_suffix(".json")
-                .map(str::to_owned)
-        })
+        .filter_map(|e| e.file_name().to_str()?.strip_suffix(".json").map(str::to_owned))
         .filter(|n| !PRESETS.contains(&n.as_str()))
         .collect();
     files.sort();
@@ -367,16 +318,7 @@ fn resolve(p: &Palette, overrides: &BTreeMap<String, String>) -> Theme {
     let [working, blocked, done] = p.status.unwrap_or([p.ansi[3], p.ansi[1], p.ansi[4]]);
     let (popover, raised, hover, selected, border, input, canvas, chrome) = if light {
         let warm = 0xe8e8e2;
-        (
-            hex(bg),
-            hex(mix(bg, 0, 0.035)),
-            "#0000000c".into(),
-            "#00000012".into(),
-            "#00000017".into(),
-            "#00000026".into(),
-            mix(bg, warm, 0.2),
-            mix(bg, warm, 0.6),
-        )
+        (hex(bg), hex(mix(bg, 0, 0.035)), "#0000000c".into(), "#00000012".into(), "#00000017".into(), "#00000026".into(), mix(bg, warm, 0.2), mix(bg, warm, 0.6))
     } else {
         (
             hex(mix(bg, 0xffffff, 0.06)),
@@ -407,10 +349,7 @@ fn resolve(p: &Palette, overrides: &BTreeMap<String, String>) -> Theme {
         ("accent", hex(p.ansi[4])),
         ("accent_foreground", hex(bg)),
         ("solid", hex(fg)),
-        (
-            "solid_foreground",
-            hex(if light { 0xffffff } else { mix(bg, 0, 0.28) }),
-        ),
+        ("solid_foreground", hex(if light { 0xffffff } else { mix(bg, 0, 0.28) })),
         ("ring", hex(mix(bg, fg, 0.7))),
         ("selection", hex(p.selection)),
         ("cursor", hex(p.cursor.unwrap_or(p.foreground))),
@@ -478,7 +417,8 @@ pub struct Person {
     /// macOS Option sends Alt shortcuts, or follows the keyboard layout.
     #[serde(skip_serializing_if = "OptionAsAlt::is_auto")]
     pub option_as_alt: OptionAsAlt,
-    /// The terminal palette by theme name, or `follow` for the app's resolved colors.
+    /// The terminal palette: a theme name, or `follow` (the default) to use the app's colors.
+    #[serde(skip_serializing_if = "is_follow")]
     pub terminal_theme: String,
     /// Light or dark: the system's, or one always.
     #[serde(skip_serializing_if = "Appearance::is_system")]
@@ -521,6 +461,10 @@ impl OptionAsAlt {
     }
 }
 
+fn is_follow(t: &String) -> bool {
+    t == FOLLOW_THEME
+}
+
 fn is_true(b: &bool) -> bool {
     *b
 }
@@ -545,7 +489,7 @@ impl Default for Person {
             pane_scrollbars: true,
             minimum_contrast: 1.0,
             option_as_alt: OptionAsAlt::Auto,
-            terminal_theme: DEFAULT_TERMINAL_THEME.into(),
+            terminal_theme: FOLLOW_THEME.into(),
             appearance: Appearance::System,
             theme: None,
             colors: BTreeMap::new(),
@@ -573,6 +517,7 @@ pub struct Settings {
     pub ui_font_size: f32,
     /// How big the whole app is drawn (1 = as designed). The zoom keys change it.
     pub zoom: f32,
+    /// The terminals' colors: a theme name, or `follow` for the app's own.
     pub terminal_theme: String,
     /// The theme showing: a preset or a file in themes/.
     pub theme: String,
@@ -611,11 +556,7 @@ pub struct Sounds {
 
 impl Default for Sounds {
     fn default() -> Self {
-        Sounds {
-            enabled: true,
-            done: None,
-            blocked: None,
-        }
+        Sounds { enabled: true, done: None, blocked: None }
     }
 }
 
@@ -632,7 +573,7 @@ impl Default for Settings {
             ui_font_family: "Geist".into(),
             ui_font_size: 13.0,
             zoom: 1.0,
-            terminal_theme: DEFAULT_TERMINAL_THEME.into(),
+            terminal_theme: FOLLOW_THEME.into(),
             theme: DEFAULT_DARK.into(),
             theme_light: DEFAULT_LIGHT.into(),
             theme_dark: DEFAULT_DARK.into(),
@@ -666,42 +607,17 @@ impl Settings {
         };
         Settings {
             // The layout's own, else the person's, else Herdr's.
-            font_family: look
-                .font
-                .clone()
-                .or(person.font.clone())
-                .unwrap_or(d.font_family),
+            font_family: look.font.clone().or(person.font.clone()).unwrap_or(d.font_family),
             font_size: look.font_size.or(person.font_size).unwrap_or(d.font_size),
-            font_weight: look
-                .font_weight
-                .or(person.font_weight)
-                .unwrap_or(d.font_weight),
+            font_weight: look.font_weight.or(person.font_weight).unwrap_or(d.font_weight),
             font_ligatures: person.font_ligatures,
-            terminal_line_height: look
-                .terminal_line_height
-                .unwrap_or(person.terminal_line_height)
-                .clamp(0.8, 2.0),
-            terminal_cell_width: look
-                .terminal_cell_width
-                .unwrap_or(person.terminal_cell_width)
-                .clamp(0.8, 2.0),
-            terminal_scroll_speed: look
-                .terminal_scroll_speed
-                .unwrap_or(person.terminal_scroll_speed)
-                .clamp(0.1, 5.0),
-            ui_font_family: look
-                .ui_font
-                .clone()
-                .or(person.ui_font.clone())
-                .unwrap_or(d.ui_font_family),
+            terminal_line_height: look.terminal_line_height.unwrap_or(person.terminal_line_height).clamp(0.8, 2.0),
+            terminal_cell_width: look.terminal_cell_width.unwrap_or(person.terminal_cell_width).clamp(0.8, 2.0),
+            terminal_scroll_speed: look.terminal_scroll_speed.unwrap_or(person.terminal_scroll_speed).clamp(0.1, 5.0),
+            ui_font_family: look.ui_font.clone().or(person.ui_font.clone()).unwrap_or(d.ui_font_family),
             ui_font_size: d.ui_font_size,
             zoom: person.zoom,
-            terminal_theme: person.terminal_theme.clone(),
-            theme: if dark {
-                theme_dark.clone()
-            } else {
-                theme_light.clone()
-            },
+            theme: if dark { theme_dark.clone() } else { theme_light.clone() },
             theme_light,
             theme_dark,
             dark,
@@ -714,8 +630,17 @@ impl Settings {
             copy_on_select: person.copy_on_select,
             minimum_contrast: person.minimum_contrast,
             option_as_alt: person.option_as_alt,
+            terminal_theme: person.terminal_theme.clone(),
         }
     }
+}
+
+/// A shipped theme as terminal colors (tests).
+#[cfg(test)]
+pub(crate) fn shipped_terminal_theme(name: &str) -> vt::Theme {
+    let text = THEMES.iter().find(|(n, _)| *n == name).unwrap().1;
+    let (p, colors) = parse_theme_file(name, text).unwrap();
+    vt::Theme::from_colors(&resolve(&p, &colors), 1.0)
 }
 
 pub fn parse_hex(s: &str) -> Option<Hsla> {
@@ -767,16 +692,10 @@ impl Settings {
             }
         }
         if !(1.0..=21.0).contains(&self.minimum_contrast) {
-            out.push(format!(
-                "minimum_contrast {} is outside 1..21",
-                self.minimum_contrast
-            ));
+            out.push(format!("minimum_contrast {} is outside 1..21", self.minimum_contrast));
         }
         if !(100..=900).contains(&self.font_weight) {
-            out.push(format!(
-                "font_weight {} is outside 100..900",
-                self.font_weight
-            ));
+            out.push(format!("font_weight {} is outside 100..900", self.font_weight));
         }
         if !(6.0..=72.0).contains(&self.font_size) {
             out.push(format!("font_size {} is outside 6..72", self.font_size));
@@ -792,9 +711,9 @@ pub fn path() -> std::path::PathBuf {
 thread_local! {
     static CURRENT: RefCell<(Rc<Settings>, Rc<Theme>, vt::Theme)> = {
         let settings = Settings::default();
-        let (p, overrides) = bundled_terminal_palette();
-        let terminal = vt::Theme::from_colors(&resolve(&p, &overrides), settings.minimum_contrast);
-        RefCell::new((Rc::new(settings), Rc::new(resolve(&GRAPHITE, &BTreeMap::new())), terminal))
+        let theme = resolve(&GRAPHITE, &BTreeMap::new());
+        let terminal = vt::Theme::from_colors(&theme, settings.minimum_contrast);
+        RefCell::new((Rc::new(settings), Rc::new(theme), terminal))
     };
 }
 
@@ -817,10 +736,7 @@ pub fn terminal_theme() -> vt::Theme {
 
 /// A theme color as GPUI paint (magenta if missing, so mistakes show).
 pub fn color(name: &str) -> Hsla {
-    theme()
-        .get(name)
-        .and_then(|v| parse_hex(v))
-        .unwrap_or(gpui::hsla(0.83, 1.0, 0.5, 1.0))
+    theme().get(name).and_then(|v| parse_hex(v)).unwrap_or(gpui::hsla(0.83, 1.0, 0.5, 1.0))
 }
 
 /// A theme color name, or a literal `#rrggbb[aa]`.
@@ -832,18 +748,12 @@ pub fn color_or_literal(v: &str) -> Hsla {
 pub fn load_person() -> Result<Person, String> {
     let p = path();
     if !p.exists() {
-        let _ = crate::persist::write_atomic(
-            &p,
-            serde_json::to_string_pretty(&Person::default()).unwrap() + "\n",
-        );
+        let _ = crate::persist::write_atomic(&p, serde_json::to_string_pretty(&Person::default()).unwrap() + "\n");
     }
     let text = std::fs::read_to_string(&p).map_err(|e| e.to_string())?;
     let person: Person = serde_json::from_str(&text).map_err(|e| e.to_string())?;
     if !(ZOOM_MIN..=ZOOM_MAX).contains(&person.zoom) {
-        return Err(format!(
-            "zoom {} is outside {ZOOM_MIN}..{ZOOM_MAX}",
-            person.zoom
-        ));
+        return Err(format!("zoom {} is outside {ZOOM_MIN}..{ZOOM_MAX}", person.zoom));
     }
     Ok(person)
 }
@@ -854,11 +764,8 @@ pub fn telemetry_setting(person: &Result<Person, String>) -> bool {
     match person {
         Ok(p) => p.telemetry,
         Err(_) => {
-            let raw = std::fs::read_to_string(path())
-                .ok()
-                .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok());
-            raw.and_then(|v| v.get("telemetry").and_then(serde_json::Value::as_bool))
-                .unwrap_or(true)
+            let raw = std::fs::read_to_string(path()).ok().and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok());
+            raw.and_then(|v| v.get("telemetry").and_then(serde_json::Value::as_bool)).unwrap_or(true)
         }
     }
 }
@@ -905,18 +812,19 @@ fn set_from(s: Settings, dir: &Path) -> bool {
     CURRENT.with(|c| {
         // Read the themes even when the settings are the same: their files may
         // have new colors under the same names.
-        let (p, mut colors) =
-            palette_in(&s.theme, dir).unwrap_or_else(|_| (GRAPHITE.clone(), BTreeMap::new()));
+        let (p, mut colors) = palette_in(&s.theme, dir).unwrap_or_else(|_| (GRAPHITE.clone(), BTreeMap::new()));
         colors.extend(s.colors.clone());
         let theme = resolve(&p, &colors);
-        let terminal = if s.terminal_theme == FOLLOW_THEME {
-            vt::Theme::from_colors(&theme, s.minimum_contrast)
-        } else {
-            let (p, colors) = palette_in(&s.terminal_theme, dir)
-                .or_else(|_| palette_in(DEFAULT_TERMINAL_THEME, dir))
-                .unwrap_or_else(|_| bundled_terminal_palette());
-            vt::Theme::from_colors(&resolve(&p, &colors), s.minimum_contrast)
-        };
+        // A terminal theme that is not "follow" (or cannot be read: problems()
+        // reports it) keeps the user's and the layout's color overrides.
+        let terminal_colors = (s.terminal_theme != FOLLOW_THEME)
+            .then(|| palette_in(&s.terminal_theme, dir).ok())
+            .flatten()
+            .map(|(p, mut colors)| {
+                colors.extend(s.colors.clone());
+                resolve(&p, &colors)
+            });
+        let terminal = vt::Theme::from_colors(terminal_colors.as_ref().unwrap_or(&theme), s.minimum_contrast);
         let current = c.borrow();
         if *current.0 == s && *current.1 == theme && current.2 == terminal {
             return false;
@@ -933,51 +841,23 @@ fn set_from(s: Settings, dir: &Path) -> bool {
 /// (logical px: a scaled screen already draws bigger), in tenths.
 pub fn first_zoom(display_width: Option<f32>) -> f32 {
     let text = system_text_scale().clamp(1.0, 2.0);
-    let screen = if display_width.is_some_and(|w| w >= 2400.0) {
-        1.15
-    } else {
-        1.0
-    };
+    let screen = if display_width.is_some_and(|w| w >= 2400.0) { 1.15 } else { 1.0 };
     ((text * screen * 10.0).round() / 10.0).clamp(ZOOM_MIN, ZOOM_MAX)
 }
 
 fn system_text_scale() -> f32 {
     let run = |cmd: &str, args: &[&str]| -> Option<String> {
-        let out = crate::spawn::command(cmd)
-            .args(args)
-            .stdin(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .output()
-            .ok()?;
-        out.status
-            .success()
-            .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+        let out = crate::spawn::command(cmd).args(args).stdin(std::process::Stdio::null()).stderr(std::process::Stdio::null()).output().ok()?;
+        out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
     };
     if cfg!(windows) {
         // Percent, 100..225, as REG_DWORD hex.
-        return run(
-            "reg",
-            &[
-                "query",
-                r"HKCU\Software\Microsoft\Accessibility",
-                "/v",
-                "TextScaleFactor",
-            ],
-        )
-        .and_then(|o| {
-            o.split_whitespace()
-                .last()
-                .and_then(|h| u32::from_str_radix(h.trim_start_matches("0x"), 16).ok())
-        })
-        .map_or(1.0, |p| p as f32 / 100.0);
+        return run("reg", &["query", r"HKCU\Software\Microsoft\Accessibility", "/v", "TextScaleFactor"])
+            .and_then(|o| o.split_whitespace().last().and_then(|h| u32::from_str_radix(h.trim_start_matches("0x"), 16).ok()))
+            .map_or(1.0, |p| p as f32 / 100.0);
     }
     if cfg!(target_os = "linux") {
-        return run(
-            "gsettings",
-            &["get", "org.gnome.desktop.interface", "text-scaling-factor"],
-        )
-        .and_then(|o| o.trim().parse().ok())
-        .unwrap_or(1.0);
+        return run("gsettings", &["get", "org.gnome.desktop.interface", "text-scaling-factor"]).and_then(|o| o.trim().parse().ok()).unwrap_or(1.0);
     }
     1.0
 }
@@ -1021,30 +901,13 @@ pub fn load_home_fonts(cx: &mut gpui::App) -> bool {
     static LOADED: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
     let home = crate::mods::app_dir();
     let mut dirs = vec![home.join("fonts")];
-    dirs.extend(
-        std::fs::read_dir(home.join("mods"))
-            .into_iter()
-            .flatten()
-            .flatten()
-            .map(|e| e.path().join("fonts")),
-    );
+    dirs.extend(std::fs::read_dir(home.join("mods")).into_iter().flatten().flatten().map(|e| e.path().join("fonts")));
     let mut new = Vec::new();
     let mut loaded = LOADED.lock().unwrap();
     for dir in dirs {
-        for path in std::fs::read_dir(&dir)
-            .into_iter()
-            .flatten()
-            .flatten()
-            .map(|e| e.path())
-        {
-            let font = path
-                .extension()
-                .and_then(|e| e.to_str())
-                .is_some_and(|e| matches!(e.to_lowercase().as_str(), "ttf" | "otf" | "ttc"));
-            if font
-                && !loaded.contains(&path)
-                && let Ok(bytes) = std::fs::read(&path)
-            {
+        for path in std::fs::read_dir(&dir).into_iter().flatten().flatten().map(|e| e.path()) {
+            let font = path.extension().and_then(|e| e.to_str()).is_some_and(|e| matches!(e.to_lowercase().as_str(), "ttf" | "otf" | "ttc"));
+            if font && !loaded.contains(&path) && let Ok(bytes) = std::fs::read(&path) {
                 new.push(std::borrow::Cow::Owned(bytes));
                 loaded.push(path);
             }
@@ -1115,6 +978,31 @@ mod tests {
 
     use super::*;
 
+    const ATOM_ONE_LIGHT: &str = include_str!("../defaults/themes/atom-one-light.json");
+
+    #[test]
+    fn terminal_theme_defaults_to_follow_and_keeps_old_values() {
+        let person: Person = serde_json::from_str("{}").unwrap();
+        assert_eq!(person.terminal_theme, "follow");
+        assert_eq!(Settings::default().terminal_theme, "follow");
+        let saved = serde_json::to_string(&person).unwrap();
+        assert!(!saved.contains("terminal_theme"), "{saved}");
+        let old: Person = serde_json::from_str(r#"{"terminal_theme":"atom-one-light"}"#).unwrap();
+        assert_eq!(old.terminal_theme, "atom-one-light");
+        assert!(serde_json::to_string(&old).unwrap().contains("atom-one-light"));
+    }
+
+    #[test]
+    fn default_terminal_theme_is_the_app_theme() {
+        let dir = std::env::temp_dir().join(format!("herdr-terminal-follow-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let settings = Settings::default();
+        assert_eq!(settings.terminal_theme, FOLLOW_THEME);
+        set_from(settings.clone(), &dir);
+        assert!(terminal_theme() == vt::Theme::from_colors(&theme(), settings.minimum_contrast));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     #[test]
     fn terminal_theme_is_independent_and_reloads_file_edits() {
         let dir = std::env::temp_dir().join(format!("herdr-terminal-theme-{}", std::process::id()));
@@ -1123,7 +1011,6 @@ mod tests {
         std::fs::write(&path, ATOM_ONE_LIGHT).unwrap();
 
         let mut person: Person = serde_json::from_str("{}").unwrap();
-        assert_eq!(person.terminal_theme, "atom-one-light");
         person.terminal_theme = "custom".into();
         person.colors.insert("terminal_foreground".into(), "#445566".into());
         let saved = person_text(&person, "{}").unwrap();
@@ -1134,19 +1021,28 @@ mod tests {
         assert!(set_from(settings.clone(), &dir));
         let chrome = theme();
         assert_eq!(chrome["terminal_foreground"], "#445566");
-        assert_eq!(terminal_theme().fg, Rgb(0x2a, 0x2c, 0x33));
+        // The theme's palette and the user's color overrides both reach terminals.
+        assert_eq!(terminal_theme().bg, Rgb(0xf9, 0xf9, 0xf9));
+        assert_eq!(terminal_theme().fg, Rgb(0x44, 0x55, 0x66));
+        assert_ne!(terminal_theme().bg, rgb(&chrome["background"]));
 
-        std::fs::write(&path, ATOM_ONE_LIGHT.replace("#2a2c33", "#112233")).unwrap();
-        assert_eq!(terminal_theme().fg, Rgb(0x2a, 0x2c, 0x33), "reads use the cached palette");
+        std::fs::write(&path, ATOM_ONE_LIGHT.replace("#f9f9f9", "#112233")).unwrap();
+        assert_eq!(terminal_theme().bg, Rgb(0xf9, 0xf9, 0xf9), "reads use the cached palette");
         assert!(set_from(settings.clone(), &dir), "a terminal-only theme edit triggers refresh");
-        assert_eq!(terminal_theme().fg, Rgb(0x11, 0x22, 0x33));
+        assert_eq!(terminal_theme().bg, Rgb(0x11, 0x22, 0x33));
         assert_eq!(theme(), chrome);
         assert!(!set_from(settings.clone(), &dir));
 
         settings.terminal_theme = "paper".into();
         assert!(set_from(settings.clone(), &dir));
         assert_eq!(terminal_theme().bg, Rgb(255, 255, 255));
+        assert_eq!(terminal_theme().fg, Rgb(0x44, 0x55, 0x66));
         assert_eq!(theme(), chrome);
+
+        settings.terminal_theme = "missing".into();
+        assert!(settings.problems().iter().any(|p| p.starts_with("terminal_theme:")));
+        assert!(set_from(settings.clone(), &dir));
+        assert_eq!(terminal_theme().bg, rgb(&chrome["background"]), "an unknown theme follows the app");
 
         settings.terminal_theme = "follow".into();
         assert!(set_from(settings, &dir));
@@ -1162,13 +1058,9 @@ mod tests {
         person.zoom = 1.5;
         person.font = None;
         person.telemetry = true;
-        let saved: serde_json::Value =
-            serde_json::from_str(&person_text(&person, raw).unwrap()).unwrap();
+        let saved: serde_json::Value = serde_json::from_str(&person_text(&person, raw).unwrap()).unwrap();
         assert_eq!(saved["zoom"], 1.5);
-        assert_eq!(
-            saved["worktrees"],
-            serde_json::json!({"directory":"~/Developer/worktrees","future":true})
-        );
+        assert_eq!(saved["worktrees"], serde_json::json!({"directory":"~/Developer/worktrees","future":true}));
         assert_eq!(saved["another_mod"], serde_json::json!({"enabled":true}));
         assert!(saved.get("font").is_none());
         assert!(saved.get("telemetry").is_none());
@@ -1183,122 +1075,54 @@ mod tests {
         let default: Person = serde_json::from_str("{}").unwrap();
         let look = crate::layout::Look::default();
         let s = Settings::compose(&default, &look, true);
-        assert_eq!(
-            (s.terminal_line_height, s.terminal_scroll_speed),
-            (1.0, 1.0)
-        );
-        let person: Person =
-            serde_json::from_str(r#"{"terminal_line_height":1.3,"terminal_scroll_speed":0.5}"#)
-                .unwrap();
-        let roundtrip: Person =
-            serde_json::from_value(serde_json::to_value(&person).unwrap()).unwrap();
+        assert_eq!((s.terminal_line_height, s.terminal_scroll_speed), (1.0, 1.0));
+        let person: Person = serde_json::from_str(r#"{"terminal_line_height":1.3,"terminal_scroll_speed":0.5}"#).unwrap();
+        let roundtrip: Person = serde_json::from_value(serde_json::to_value(&person).unwrap()).unwrap();
         let s = Settings::compose(&roundtrip, &look, true);
-        assert_eq!(
-            (s.terminal_line_height, s.terminal_scroll_speed),
-            (1.3, 0.5)
-        );
-        let look: crate::layout::Look =
-            serde_json::from_str(r#"{"terminal_line_height":0.1,"terminal_scroll_speed":10}"#)
-                .unwrap();
+        assert_eq!((s.terminal_line_height, s.terminal_scroll_speed), (1.3, 0.5));
+        let look: crate::layout::Look = serde_json::from_str(r#"{"terminal_line_height":0.1,"terminal_scroll_speed":10}"#).unwrap();
         let s = Settings::compose(&person, &look, true);
-        assert_eq!(
-            (s.terminal_line_height, s.terminal_scroll_speed),
-            (0.8, 5.0)
-        );
-        let person = Person {
-            terminal_line_height: 5.0,
-            terminal_scroll_speed: 0.0,
-            ..default
-        };
+        assert_eq!((s.terminal_line_height, s.terminal_scroll_speed), (0.8, 5.0));
+        let person = Person { terminal_line_height: 5.0, terminal_scroll_speed: 0.0, ..default };
         let s = Settings::compose(&person, &crate::layout::Look::default(), true);
-        assert_eq!(
-            (s.terminal_line_height, s.terminal_scroll_speed),
-            (2.0, 0.1)
-        );
+        assert_eq!((s.terminal_line_height, s.terminal_scroll_speed), (2.0, 0.1));
     }
 
     #[test]
     fn terminal_cell_width_defaults_inherits_overrides_and_clamps() {
         let default: Person = serde_json::from_str("{}").unwrap();
         let none = crate::layout::Look::default();
-        assert_eq!(
-            Settings::compose(&default, &none, true).terminal_cell_width,
-            1.0
-        );
+        assert_eq!(Settings::compose(&default, &none, true).terminal_cell_width, 1.0);
         let person: Person = serde_json::from_str(r#"{"terminal_cell_width":0.95}"#).unwrap();
-        let roundtrip: Person =
-            serde_json::from_value(serde_json::to_value(&person).unwrap()).unwrap();
-        assert_eq!(
-            Settings::compose(&roundtrip, &none, true).terminal_cell_width,
-            0.95
-        );
-        let look: crate::layout::Look =
-            serde_json::from_str(r#"{"terminal_cell_width":1.1}"#).unwrap();
-        assert_eq!(
-            Settings::compose(&person, &look, true).terminal_cell_width,
-            1.1
-        );
-        let look: crate::layout::Look =
-            serde_json::from_str(r#"{"terminal_cell_width":0.1}"#).unwrap();
-        assert_eq!(
-            Settings::compose(&person, &look, true).terminal_cell_width,
-            0.8
-        );
-        let person = Person {
-            terminal_cell_width: 5.0,
-            ..default
-        };
-        assert_eq!(
-            Settings::compose(&person, &none, true).terminal_cell_width,
-            2.0
-        );
+        let roundtrip: Person = serde_json::from_value(serde_json::to_value(&person).unwrap()).unwrap();
+        assert_eq!(Settings::compose(&roundtrip, &none, true).terminal_cell_width, 0.95);
+        let look: crate::layout::Look = serde_json::from_str(r#"{"terminal_cell_width":1.1}"#).unwrap();
+        assert_eq!(Settings::compose(&person, &look, true).terminal_cell_width, 1.1);
+        let look: crate::layout::Look = serde_json::from_str(r#"{"terminal_cell_width":0.1}"#).unwrap();
+        assert_eq!(Settings::compose(&person, &look, true).terminal_cell_width, 0.8);
+        let person = Person { terminal_cell_width: 5.0, ..default };
+        assert_eq!(Settings::compose(&person, &none, true).terminal_cell_width, 2.0);
     }
 
     #[test]
     fn layout_look_wins_and_settings_fill_what_it_leaves_unset() {
         let person = Person {
-            font: Some("person".into()),
-            font_size: Some(19.0),
-            ui_font: Some("person-ui".into()),
+            font: Some("person".into()), font_size: Some(19.0), ui_font: Some("person-ui".into()),
             theme: Some(crate::layout::ThemeChoice::One("paper".into())),
             colors: [("accent".into(), "#123456".into())].into(),
             ..Person::default()
         };
         let look = crate::layout::Look {
-            font: Some("layout".into()),
-            font_size: Some(14.0),
-            ui_font: Some("layout-ui".into()),
+            font: Some("layout".into()), font_size: Some(14.0), ui_font: Some("layout-ui".into()),
             theme: Some(crate::layout::ThemeChoice::One("ink".into())),
-            colors: Some(
-                [
-                    ("accent".into(), "#abcdef".into()),
-                    ("text".into(), "#ffffff".into()),
-                ]
-                .into(),
-            ),
+            colors: Some([("accent".into(), "#abcdef".into()), ("text".into(), "#ffffff".into())].into()),
             ..Default::default()
         };
         let inherited = Settings::compose(&person, &crate::layout::Look::default(), true);
-        assert_eq!(
-            (
-                inherited.font_family.as_str(),
-                inherited.font_size,
-                inherited.ui_font_family.as_str(),
-                inherited.theme.as_str()
-            ),
-            ("person", 19.0, "person-ui", "paper")
-        );
+        assert_eq!((inherited.font_family.as_str(), inherited.font_size, inherited.ui_font_family.as_str(), inherited.theme.as_str()), ("person", 19.0, "person-ui", "paper"));
         assert_eq!(inherited.colors["accent"], "#123456");
         let own = Settings::compose(&person, &look, true);
-        assert_eq!(
-            (
-                own.font_family.as_str(),
-                own.font_size,
-                own.ui_font_family.as_str(),
-                own.theme.as_str()
-            ),
-            ("layout", 14.0, "layout-ui", "ink")
-        );
+        assert_eq!((own.font_family.as_str(), own.font_size, own.ui_font_family.as_str(), own.theme.as_str()), ("layout", 14.0, "layout-ui", "ink"));
         assert_eq!(own.colors["accent"], "#abcdef");
         assert_eq!(own.colors["text"], "#ffffff");
     }
@@ -1307,59 +1131,28 @@ mod tests {
     fn option_as_alt_defaults_to_auto_and_round_trips() {
         let default: Person = serde_json::from_str("{}").unwrap();
         assert_eq!(default.option_as_alt, OptionAsAlt::Auto);
-        for (value, expected) in [
-            ("auto", OptionAsAlt::Auto),
-            ("off", OptionAsAlt::Off),
-            ("on", OptionAsAlt::On),
-            ("left", OptionAsAlt::Left),
-            ("right", OptionAsAlt::Right),
-        ] {
-            let person: Person =
-                serde_json::from_value(serde_json::json!({"option_as_alt": value})).unwrap();
+        for (value, expected) in [("auto", OptionAsAlt::Auto), ("off", OptionAsAlt::Off), ("on", OptionAsAlt::On), ("left", OptionAsAlt::Left), ("right", OptionAsAlt::Right)] {
+            let person: Person = serde_json::from_value(serde_json::json!({"option_as_alt": value})).unwrap();
             let settings = Settings::compose(&person, &crate::layout::Look::default(), true);
             assert_eq!(settings.option_as_alt, expected);
-            assert_eq!(
-                serde_json::to_value(settings).unwrap()["option_as_alt"],
-                value
-            );
+            assert_eq!(serde_json::to_value(settings).unwrap()["option_as_alt"], value);
         }
-        assert!(
-            serde_json::from_value::<Person>(serde_json::json!({"option_as_alt": "invalid"}))
-                .is_err()
-        );
+        assert!(serde_json::from_value::<Person>(serde_json::json!({"option_as_alt": "invalid"})).is_err());
     }
 
     #[test]
     fn font_weight_defaults_to_medium_and_validates_the_range() {
         let default: Person = serde_json::from_str("{}").unwrap();
-        assert_eq!(
-            Settings::compose(&default, &crate::layout::Look::default(), true).font_weight,
-            500
-        );
-        assert!(
-            serde_json::to_value(&default)
-                .unwrap()
-                .get("font_weight")
-                .is_none()
-        );
+        assert_eq!(Settings::compose(&default, &crate::layout::Look::default(), true).font_weight, 500);
+        assert!(serde_json::to_value(&default).unwrap().get("font_weight").is_none());
         for weight in [100, 300, 400, 900, 50, 950] {
-            let person: Person =
-                serde_json::from_value(serde_json::json!({"font_weight": weight})).unwrap();
+            let person: Person = serde_json::from_value(serde_json::json!({"font_weight": weight})).unwrap();
             let settings = Settings::compose(&person, &crate::layout::Look::default(), true);
             assert_eq!(settings.font_weight, weight);
-            assert_eq!(
-                settings.problems().is_empty(),
-                (100..=900).contains(&weight)
-            );
+            assert_eq!(settings.problems().is_empty(), (100..=900).contains(&weight));
         }
-        let look = crate::layout::Look {
-            font_weight: Some(300),
-            ..Default::default()
-        };
-        let person = Person {
-            font_weight: Some(400),
-            ..Person::default()
-        };
+        let look = crate::layout::Look { font_weight: Some(300), ..Default::default() };
+        let person = Person { font_weight: Some(400), ..Person::default() };
         assert_eq!(Settings::compose(&person, &look, true).font_weight, 300);
     }
 
@@ -1369,18 +1162,11 @@ mod tests {
         assert_eq!(default.minimum_contrast, 1.0);
         assert_eq!(Settings::default().minimum_contrast, 1.0);
         for ratio in [1.0, 1.6, 21.0, 0.0, 21.1] {
-            let person: Person =
-                serde_json::from_value(serde_json::json!({"minimum_contrast": ratio})).unwrap();
+            let person: Person = serde_json::from_value(serde_json::json!({"minimum_contrast": ratio})).unwrap();
             let settings = Settings::compose(&person, &crate::layout::Look::default(), true);
             assert_eq!(settings.minimum_contrast, ratio);
-            assert_eq!(
-                serde_json::to_value(person).unwrap()["minimum_contrast"],
-                serde_json::json!(ratio)
-            );
-            assert_eq!(
-                settings.problems().is_empty(),
-                (1.0..=21.0).contains(&ratio)
-            );
+            assert_eq!(serde_json::to_value(person).unwrap()["minimum_contrast"], serde_json::json!(ratio));
+            assert_eq!(settings.problems().is_empty(), (1.0..=21.0).contains(&ratio));
         }
     }
 
@@ -1406,45 +1192,20 @@ mod tests {
     #[test]
     fn shipped_looks_and_theme_clicks_have_the_same_precedence() {
         use crate::layout::{Node, ThemeChoice};
-        let person = Person {
-            font_size: Some(19.0),
-            theme: Some(ThemeChoice::One("moss".into())),
-            ..Person::default()
-        };
-        let main: Node =
-            serde_json::from_str(include_str!("../defaults/layouts/main.json")).unwrap();
-        assert!(
-            main.look.theme.is_none()
-                && main.look.colors.is_none()
-                && main.look.font.is_none()
-                && main.look.font_size.is_none()
-                && main.look.ui_font.is_none()
-        );
-        assert_eq!(
-            Settings::compose(&Person::default(), &main.look, true).font_size,
-            14.0
-        );
+        let person = Person { font_size: Some(19.0), theme: Some(ThemeChoice::One("moss".into())), ..Person::default() };
+        let main: Node = serde_json::from_str(include_str!("../defaults/layouts/main.json")).unwrap();
+        assert!(main.look.theme.is_none() && main.look.colors.is_none() && main.look.font.is_none() && main.look.font_size.is_none() && main.look.ui_font.is_none());
+        assert_eq!(Settings::compose(&Person::default(), &main.look, true).font_size, 14.0);
         assert_eq!(main.look.terminal_padding, Some([14.0, 12.0]));
-        let terminals: Node =
-            serde_json::from_str(include_str!("../defaults/layouts/terminals.json")).unwrap();
-        assert_eq!(
-            Settings::compose(&person, &terminals.look, true).font_size,
-            15.0
-        );
+        let terminals: Node = serde_json::from_str(include_str!("../defaults/layouts/terminals.json")).unwrap();
+        assert_eq!(Settings::compose(&person, &terminals.look, true).font_size, 15.0);
         let main_settings = Settings::compose(&person, &main.look, true);
-        assert_eq!(
-            (main_settings.font_size, main_settings.theme.as_str()),
-            (19.0, "moss")
-        );
-        let mut win98: Node =
-            serde_json::from_str(include_str!("../defaults/layouts/win98.json")).unwrap();
+        assert_eq!((main_settings.font_size, main_settings.theme.as_str()), (19.0, "moss"));
+        let mut win98: Node = serde_json::from_str(include_str!("../defaults/layouts/win98.json")).unwrap();
         let win_settings = Settings::compose(&person, &win98.look, true);
         assert_eq!(win_settings.theme, "win98");
         assert_eq!(win_settings.font_family, "PxPlus IBM VGA 8x16");
-        let clicks = crate::layout_sync::State {
-            theme: Some(ThemeChoice::One("ink".into())),
-            ..Default::default()
-        };
+        let clicks = crate::layout_sync::State { theme: Some(ThemeChoice::One("ink".into())), ..Default::default() };
         clicks.apply(&mut win98);
         assert_eq!(Settings::compose(&person, &win98.look, true).theme, "ink");
     }
@@ -1453,40 +1214,11 @@ mod tests {
     /// settings.json key.
     #[test]
     fn the_guide_explains_every_setting() {
-        let all = Person {
-            core: Some(String::new()),
-            font: Some(String::new()),
-            font_size: Some(1.0),
-            font_weight: Some(400),
-            ui_font: Some(String::new()),
-            telemetry: false,
-            clipboard_write: false,
-            copy_on_select: false,
-            appearance: Appearance::Light,
-            theme: Some(crate::layout::ThemeChoice::One(String::new())),
-            colors: [("text".into(), String::new())].into(),
-            ..Person::default()
-        };
-        let keys: Vec<String> = serde_json::to_value(&all)
-            .unwrap()
-            .as_object()
-            .unwrap()
-            .keys()
-            .cloned()
-            .collect();
+        let all = Person { core: Some(String::new()), font: Some(String::new()), font_size: Some(1.0), font_weight: Some(400), ui_font: Some(String::new()), telemetry: false, clipboard_write: false, copy_on_select: false, appearance: Appearance::Light, theme: Some(crate::layout::ThemeChoice::One(String::new())), colors: [("text".into(), String::new())].into(), ..Person::default() };
+        let keys: Vec<String> = serde_json::to_value(&all).unwrap().as_object().unwrap().keys().cloned().collect();
         let guide = include_str!("../defaults/AGENTS.md");
-        let section = guide
-            .split("## The person")
-            .nth(1)
-            .and_then(|s| s.split("\n## ").next())
-            .unwrap_or_default();
-        let missing: Vec<&String> = keys
-            .iter()
-            .filter(|k| !section.contains(&format!("`{k}`")))
-            .collect();
-        assert!(
-            missing.is_empty(),
-            "defaults/AGENTS.md (## The person) doesn't explain: {missing:?}"
-        );
+        let section = guide.split("## The person").nth(1).and_then(|s| s.split("\n## ").next()).unwrap_or_default();
+        let missing: Vec<&String> = keys.iter().filter(|k| !section.contains(&format!("`{k}`"))).collect();
+        assert!(missing.is_empty(), "defaults/AGENTS.md (## The person) doesn't explain: {missing:?}");
     }
 }
