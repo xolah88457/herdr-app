@@ -36,7 +36,10 @@ To start one the person will look at later without moving them there, pass
 herdr-app do space.new --name eng-123 --folder ~/code/app/eng-123 --argv '["claude"]' --task "Implement ENG-123" --focus false
 ```
 
-For in-place placement, right-click the other space, tab or terminal pane, choose its **Tile** row, then a half or corner. Alternatively, drag the sidebar space, terminal tab, or menu’s Tile row directly onto a workspace edge or corner. A center drop cancels. **Untile workspace** restores the ordinary view without changing the source tabs. `herdr-app do mod.open --name session-tiles` opens a separate floating session picker, not the in-place control.
+Tiling (two spaces, tabs or panes side by side in one window) is UI-only:
+right-click Tile… or drag a sidebar space or tab onto a workspace edge. There
+is no `herdr-app do` command for it, and it changes no tabs or layout, so don't
+try to script it.
 
 Pick an explicit, useful name for every new space and tab; don't rely on
 default names. Use IDs from `ls` rather than guessing or acting on the wrong
@@ -44,9 +47,9 @@ focused pane. In the tab bar, unnamed tabs show live contextual labels; these
 are not persisted names or identifiers.
 
 The main layout’s Tasks panel uses `tsk` in the space’s folder on its machine;
-use `tsk list --json` there to read the same board. The + menu can start
-Entwurf Pi in tmux on a local Mac or Linux machine. Its separate setup action
-writes Pi settings: do not register it on the person's behalf without consent.
+`tsk list --json` there reads the same board. Its + menu can also start Entwurf
+Pi in tmux; the separate setup action writes Pi settings, so don't register it
+without consent.
 
 ```sh
 herdr-app do space.new --name api --folder /path/to/api
@@ -137,7 +140,11 @@ set). It is the installed guide to settings, layouts, commands and mods.
 Read the generated `.d.ts` files beside it for full API details; do not edit
 those files or the generated guide. The app rewrites them on start.
 
-- **Settings > Look > Terminal theme** selects terminal colors independently of app appearance. `terminal_theme` in settings.json defaults to `atom-one-light`; `follow` uses the current Herdr theme.
+- `terminal_theme` in settings.json (Settings > Look) picks terminal colors:
+  `follow` (default) uses the app theme; or a preset or `themes/<name>.json`
+  (shipped: `atom-one-dark`, `atom-one-light`, `win98`). Unknown values fall
+  back to `follow` and show as a problem. With a non-`follow` theme, `colors`
+  still override terminal colors.
 - `terminal_line_height` (default 1, 0.8..2) adjusts terminal rows;
   `terminal_cell_width` (default 1, 0.8..2) adjusts terminal columns;
   `terminal_scroll_speed` (default 1, 0.1..5) adjusts wheel and trackpad
@@ -198,13 +205,20 @@ floats included, even when the window is covered or minimized. No screen
 capture or permissions. It needs a running window that has drawn a frame;
 `HERDR_APP_HOME` selects the window, as for `status`.
 
-## Pi subagent variants
+## Pi and tmux integrations
 
-On local macOS/Linux, **+ > Pi subagents** loads one orchestrator extension. Settings > Pi subagents > Use tmux is off by default (native Herdr split); turn it on for tmux workers. Only new launches through that menu change. Both variants expose `subagent`; use the loaded tool and do not start a second backend. The prepared copy belongs at `pi-subagents/` under the Herdr app home. See `integrations/pi-native-panes/README.md`.
+Optional helpers live in `integrations/` (details in the installed
+`~/.config/herdr-app/AGENTS.md`, section Integrations). **+ > Pi subagents**
+(local macOS/Linux, needs a terminal folder) loads one orchestrator from the
+prepared copy at `$HERDR_APP_HOME/pi-subagents`; create it with
+`integrations/pi-native-panes/prepare-copy SOURCE DEST` (`--update COPY`
+refreshes it). Settings > Pi subagents > Use tmux (`pi-subagents.tmux`, off by
+default) picks native Herdr splits or a private tmux session for new launches.
+Use the loaded `subagent` tool; never start a second backend.
 
-## Pi inside tmux
-
-Direct interactive Pi reports status to core. For Pi running inside tmux, the optional helpers in the source checkout’s `integrations/pi-tmux/` keep Pi where it is: load `herdr-status.ts` in Pi and run `herdr-tmux SESSION` from a Herdr terminal on the same host. For ordinary manual starts such as `tmux new -s test`, source `shell.sh` in a top-level interactive Herdr shell with `herdr-tmux` on PATH. Hover the agent row for its reported window/pane. `agent.focus` selects the outer terminal, not the inner Pi. Never start another Pi to inspect the first one.
+For Pi inside tmux, load `integrations/pi-tmux/herdr-status.ts` in Pi and run
+`herdr-tmux SESSION` from a Herdr terminal. `agent.focus` selects the outer
+terminal, not the inner Pi. Never start another Pi to inspect the first one.
 
 ## Problems and safety
 

@@ -60,23 +60,14 @@ The window arranges terminals. The core runs them.
 Closing the window leaves them running; closing a pane or tab ends its terminals.
 After a reboot or core crash, kept panes get fresh shells in their last folders, not their old programs.
 
-### Tasks and Entwurf in this fork
+### Fork additions
 
-In the **Herdr** layout, click **Tasks** next to **Files** and **Changes** to show the board; click again to fold it away. Each space remembers its own panel. Install [tsk](https://github.com/smarzban/tsk) on the space’s machine (`brew install smarzban/tap/tsk` on macOS). **Refresh** reads the same tasks as `tsk list` in that space’s folder; **Open tsk** opens its interactive board for adding and editing tasks. No `tsk setup herdr` step is needed.
+- **Tasks.** In the **Herdr** layout, click **Tasks** next to **Files** and **Changes** to show the board. It reads `tsk list --json` (and `--done`) in the space's folder, so install [tsk](https://github.com/smarzban/tsk) on that machine; **Open tsk** edits the board. The `workspace.tasks` shared key turns the panel off.
+- **Tiling.** Right-click a different space, tab or pane and choose **Tile…**, or drag a sidebar space or tab onto a workspace edge or corner, to show two sessions side by side. **Untile workspace** returns to ordinary tabs; nothing moves, merges or stops. Tiling is window-only and UI-only (no `herdr-app do` command).
+- **Terminal colors.** Settings > Look > Terminal theme: `follow` (default) uses the app theme; `atom-one-dark`, `atom-one-light`, `win98` or your own theme file give terminals separate colors.
+- **Entwurf and Pi.** The **+** menu on local macOS/Linux spaces starts [Entwurf](https://github.com/junghan0611/entwurf) Pi in tmux (**Set up Entwurf for Pi…** registers it with Pi after confirmation), and **Pi subagents** runs a prepared [native-pane copy](integrations/pi-native-panes/README.md) of the subagent extension. Entwurf needs tmux, Pi, Entwurf (tested: `@junghanacs/entwurf@0.55.1`, Node 24+, Pi 1.5.2, range `>=1.5.2 <1.6`) and Python 3 on your `PATH`; `entwurf check-bridge` verifies the bridge. Neither tool is bundled; the [Pi/tmux bridge](integrations/pi-tmux/README.md) shows Pi running inside tmux in the Agents panel.
 
-For [Entwurf](https://github.com/junghan0611/entwurf), use the **+** menu in a local macOS or Linux space:
-
-1. Put tmux, Pi and Entwurf on your terminal’s `PATH`. The tested combination was `npm install -g @junghanacs/entwurf@0.55.1` with Node 24+ and Pi 1.5.2 (supported range: `>=1.5.2 <1.6`). Setup also needs Python 3.
-2. In the project’s terminal folder, choose **Set up Entwurf for Pi…** and review the confirmation. This registers the package and bridge with Pi; it is not required on every launch. `entwurf check-bridge` checks the bridge without sending a model request.
-3. Choose **Entwurf Pi in tmux**. Pi opens in a new Herdr tab. Its Entwurf siblings open in tmux windows, not additional Herdr tabs. Setup and launch never run automatically.
-
-These are desktop integrations, not installs of the original Herdr TUI plugins. [Automatic naming](https://github.com/qu8n/herdr-automatic-rename) needs no shell hook. Entwurf’s tmux workflow avoids the legacy Herdr API; upstream [does not certify the macOS harness rails](https://github.com/junghan0611/entwurf/blob/main/docs/setup-clean-host.md). Neither external tool is bundled.
-
-### Tile sessions
-
-With one space open, right-click a different space in the sidebar and choose **Tile space…**, then **Right**. Both spaces appear in the main workspace. For sessions from different tabs, right-click the other tab and use **Tile tab…**. A tab placement uses its focused terminal; a space placement shows its selected tab including its splits and mod panes. If a terminal handles right-clicks, use **Shift+right-click** for the pane menu.
-
-You can also drag a space directly from the sidebar or a terminal tab from the tab strip onto a workspace edge or corner. Releasing in the center cancels; dropping on another row or tab reorders instead. Use **Untile workspace** in the placement menu to return without moving panes, merging tabs, or stopping programs. **Floating session view…** is a separate, optional window.
+Details for agents are in the installed guide (`defaults/AGENTS.md`); the fork's design notes are in [docs/fork-change-log.md](docs/fork-change-log.md).
 
 ## Work on another machine
 
@@ -115,10 +106,6 @@ Builds from source do not update themselves.
 Usage telemetry is on by default in releases. Turn it off in Settings → Privacy.
 Mods are trusted code, not sandboxed extensions. Read [security and privacy](docs/security.md) before installing someone else's mod.
 
-## Using Pi inside tmux
-
-If the Agents panel is empty when Pi runs inside tmux, use the [optional Pi/tmux integration](integrations/pi-tmux/README.md). It keeps Pi in its existing pane and reports the attached session’s most urgent state, even when the Pi needing attention is in another tmux window. Direct Pi terminals need no bridge.
-
 ## For agents
 
 ```sh
@@ -145,7 +132,7 @@ Clone this repo with its submodules. Use Rust 1.95.0 and Zig 0.16.0, the version
 Linux needs the development packages listed in that workflow.
 
 ```sh
-git clone --recurse-submodules --branch feat/workspace-tools https://github.com/xolah88457/herdr-app.git
+git clone --recurse-submodules https://github.com/xolah88457/herdr-app.git
 cd herdr-app
 just build
 just test

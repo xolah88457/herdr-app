@@ -173,7 +173,15 @@ the highlighted line shows where it will land.
   `setAgentOrder(list.map(a => a.address))` on render so `agent.next` /
   `agent.prev` follow its list.
 
-The Agents mod shows a terminal's reported status message on hover, when present. Direct Pi needs no hook. For Pi inside tmux, see `integrations/pi-tmux/` in the source checkout. With that integration’s optional shell hook and Pi extension, manual `tmux new -s test` and grouped `tmux new -t test` in a Herdr space report too. Each attached Herdr terminal reports one aggregate status; a tmux pane is not a core address.
+The Agents mod shows a terminal's reported status message on hover, when present. Direct Pi needs no hook. Pi inside tmux needs the optional bridge under Integrations below.
+
+### Integrations (Pi and Entwurf)
+
+Optional, never installed or started automatically. The helper files live in the source checkout's `integrations/` folder (`herdr-app` repo); do not edit them.
+
+- **Pi inside tmux.** `herdr-status.ts` (a Pi extension: `pi -e /path/to/integrations/pi-tmux/herdr-status.ts`) publishes Pi's state to tmux. Run `herdr-tmux SESSION` from a Herdr terminal outside tmux instead of `tmux attach` (`-L name` or `-S socket` before the session for a private server). For ordinary starts (`tmux new -s test`, `tmux new -t test`) source `integrations/pi-tmux/shell.sh` in a top-level interactive Herdr shell with `herdr-tmux` on PATH. Each attached terminal reports one aggregate status (needs you > working > done > idle); a tmux pane is not a core address, and `agent.focus` selects the outer terminal. Needs Python 3.8+ and tmux 3.4+.
+- **Pi subagents.** **+ > Pi subagents** (local macOS/Linux, needs a terminal folder; the row is disabled without one) runs the prepared copy at `$HERDR_APP_HOME/pi-subagents` (default `${XDG_CONFIG_HOME:-$HOME/.config}/herdr-app/pi-subagents`). Prepare it once: `integrations/pi-native-panes/prepare-copy SOURCE DEST` creates the copy from a `pi-interactive-subagents-merged` checkout (refuses other versions than `3.8.0-merged.1`; `--any-version` overrides). After updating Herdr, `prepare-copy --update COPY` refreshes the launcher files only. The shared key `pi-subagents.tmux` (written by Settings > Pi subagents > Use tmux, read by the new-menu mod) picks the backend for new launches: unset or `false` runs workers in native Herdr splits, `true` in a private tmux session that ends when the Herdr tab closes. Both expose the same `subagent` tool; use the loaded one, never both. The launcher auto-loads no provider: pass extra ones yourself. Plain `pi`, Entwurf and existing sessions are unchanged.
+- **Entwurf.** The + menu on local macOS/Linux spaces can launch `entwurf pi` in tmux. **Set up Entwurf for Pi…** confirms before running `entwurf install` in the focused terminal's folder, which updates Pi registration; opening the menu or launching never does. Do not register it for the person without consent.
 
 ## Layouts: `layouts/<name>.json`
 
@@ -183,8 +191,7 @@ shown one's name. Herdr ships `main` ("Herdr": spaces by machine and the
 agents list on the left, `workspace-chrome`; tabs as pills with a + menu
 that starts a terminal or any installed agent, `new-menu`; panes as cards
 with a header; Files, Changes and Tasks panels on the right, opened from
-the tab bar and remembered per space (`workspace.panels` controls Files and
-Changes, while Tasks is available in layouts with the `taskboard` block); a status bar,
+the tab bar and remembered per space; a status bar,
 `workspace-status`), and as examples `terminals` ("Terminals": tabs in
 the title bar, panes as cards, a space picker) and `win98`
 ("Herdr 98": a whole desktop in one mod, `win98`). Add a layout by
@@ -193,16 +200,14 @@ parentheses and apostrophes, and preserves Unicode file and folder names
 (including Chinese). Directory links expand as folders; their contents load
 only when expanded.
 
-The `taskboard` mod reads `tsk list --json` in the space's folder on its
-machine (Git project, or tsk's Desk outside Git). **Refresh** rereads the
-board; **Open tsk** starts the upstream TUI there to edit it. Install `tsk`
-on that machine; Herdr does not install or maintain a second task store.
-For **+ > Pi subagents**, Settings > Pi subagents > Use tmux selects the extension for new sessions. Off (default) opens workers in native Herdr splits; on opens them in tmux panes. Both variants expose the same Pi tools: use the one already loaded, never load both. Prepare the optional extension copy first (see `integrations/pi-native-panes/README.md`). This preference does not change plain `pi`, Entwurf or existing sessions.
-
-The + menu on local macOS/Linux spaces can launch `entwurf pi` in tmux.
-**Set up Entwurf for Pi…** confirms before running `entwurf install` in the
-focused terminal's folder. This updates Pi registration; opening the menu or
-launching a tab does not perform setup. See the fork README for prerequisites.
+Panel switches are shared keys: `workspace.panels` (a list) controls Files and
+Changes; `workspace.tasks` (on unless `false`) controls Tasks, which also needs
+a layout with a `taskboard` block. The welcome flow has a Tasks card.
+The `taskboard` mod reads `tsk list --json` and `tsk list --json --done` in the
+space's folder on its machine (Git project, or tsk's Desk outside Git).
+**Refresh** rereads the board; **Open tsk** starts the upstream TUI there to
+edit it. Install `tsk` on that machine; Herdr does not install or maintain a
+second task store.
 
 **Herdr's own layouts and mods are read-only.** They are replaced whole
 on every start. Use settings.json for look (fonts, sizes, theme, colors,
@@ -313,11 +318,11 @@ then the terminal name and folder in brackets, without a second title bar. Dropp
 neighbor in the same list reorders spaces or tabs. Pick
 **Untile workspace** in the placement choices to return to ordinary tabs.
 
-The shipped pane and tab menus also offer **Floating session view…** for terminal panes.
-The `session-tiles` mod places live terminal views from the current space in
-halves or corners, even across tabs. Closing the view leaves the source tabs,
-split panes, and processes intact. This is not a change to the shared layout.
-Programs handling right-clicks still allow the menu with Shift+right-click.
+Tiling is window-local: it changes no tabs, panes or layout documents, and
+`herdr-app do` has no tiling command. Programs handling right-clicks still
+allow the menu with Shift+right-click. Each `panes()` entry has `tiled: boolean`
+(true while the workspace is tiled); the shipped `pane` header reads it to put
+the owning space first.
 
 A personal terminal menu replaces the whole menu; it doesn't merge items.
 Create `mods/my-menu/main.js` and `mod.json` (e.g.
@@ -364,14 +369,20 @@ layout's look and a block can differ:
   light or dark mode (or the person's `appearance`). `app.theme {name}`
   sets the half of the name's lightness. A layout without a theme shows
   settings.json's theme, else graphite or paper. `colors` overrides any theme color by name (see
-  `theme()` below), for terminals and panels alike: overrides apply in
+  `theme()` below), for terminals and panels alike while `terminal_theme` is
+  `follow` (with another terminal theme, the theme file's colors come first
+  and `colors` still override them): overrides apply in
   both appearances, so name theme colors (`chrome`, `canvas`) rather than
   writing hex when a layout should work light and dark.
 - `themes/<name>.json`: `{ "background", "foreground", "selection",
   "cursor"?, "ansi": [16 colors], "colors"?: {...} }`, all `#rrggbb`; panel
   colors are derived from these, `colors` overrides them. Herdr ships
-  `atom-one-dark`. The original unedited Atom One Dark and Win98 theme files
-  are upgraded to readable terminal colors; edited theme files are kept.
+  `atom-one-dark`, `atom-one-light` and `win98`. The original unedited Atom
+  One Dark and Win98 theme files are upgraded to readable terminal colors;
+  edited theme files are kept. The color key `terminal_bold_foreground`
+  (`#rrggbb`, in a theme's `colors` or settings.json `colors`) colors bold
+  text in the default foreground (not inverse, no explicit background);
+  `atom-one-light` sets it.
   A theme named like a layout (`themes/win98.json`) is
   that layout's own: Settings offers it only there.
 - `terminal_line_height`: row height multiplier (default 1, clamped to 0.8..2).
@@ -839,7 +850,14 @@ What's about the user, never a look:
   Option input on every layout. `"left"` / `"right"` makes only that Option
   key act as Alt; the other types characters. Changes apply immediately, including layout
   switches. Linux and Windows are unchanged.
-- `terminal_theme`: choose terminal colors in **Settings > Look**, independently of Herdr’s appearance. The default is `atom-one-light`; use another theme name or `follow` to use Herdr’s current theme. Applies to existing and new terminal panes without restarting their programs. A program can still request its own colors.
+- `terminal_theme`: terminal colors, in **Settings > Look**. Default `follow`:
+  terminals use the app's theme and colors (not written to settings.json).
+  Otherwise a preset name or any `themes/<name>.json` (shipped:
+  `atom-one-dark`, `atom-one-light`, `win98`). An unknown value falls back to
+  `follow` and is reported as a problem. With a non-`follow` theme, settings.json
+  `colors` and a layout's `colors` still override terminal colors. Applies to
+  existing and new terminals without restarting programs; a program can still
+  request its own colors.
 - `minimum_contrast`: terminal text contrast ratio, `1` (default) leaves
   program colors unchanged. Set it to `1.6` to enable the previous readability
   adjustment, or another number from `1` to `21`. Text below that ratio is

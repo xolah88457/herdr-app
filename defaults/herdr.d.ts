@@ -210,7 +210,7 @@ export interface PaneScroll {
 export interface PaneInfo {
   pane: string;
   /** null for a mod pane (`pane.split {mod}`): then `mod` names it, and only
-   *  pane, mod, tab, title, name, focused and zoomed are set. */
+   *  pane, mod, tab, title, name, focused, zoomed, movable and tiled are set. */
   terminal: string | null;
   mod?: string;
   tab: string;
@@ -229,6 +229,8 @@ export interface PaneInfo {
   zoomed: boolean;
   /** The app's top-center grip can rearrange this pane. False when zoomed or alone. */
   movable: boolean;
+  /** True while the workspace is tiled (several spaces or tabs shown at once). */
+  tiled: boolean;
   /** History scroll for a terminal pane's attached view; null for mod panes / alt-screen. Live. */
   scroll?: PaneScroll | null;
 }
