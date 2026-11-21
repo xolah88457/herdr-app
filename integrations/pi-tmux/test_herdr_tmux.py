@@ -66,7 +66,26 @@ class MonitorTest(unittest.TestCase):
                 self.assertIsNone(self.monitor.sample(42))
 
 
-@unittest.skipUnless(shutil.which("tmux"), "requires tmux")
+def tmux_version():
+    """(major, minor) of the installed tmux, or None when missing or unparsable."""
+    if not shutil.which("tmux"):
+        return None
+    try:
+        out = subprocess.run(["tmux", "-V"], capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    m = re.search(r"(\d+)\.(\d+)", out)
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+TMUX_VERSION = tmux_version()
+
+
+@unittest.skipUnless(
+    TMUX_VERSION is not None and TMUX_VERSION >= (3, 4),
+    "requires tmux >= 3.4 (tmux -N, #{m/r:}); found %s"
+    % (".".join(map(str, TMUX_VERSION)) if TMUX_VERSION else "none"),
+)
 class AttachTest(unittest.TestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory(prefix="herdr-tmux-", dir="/tmp")
