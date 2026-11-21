@@ -1048,6 +1048,18 @@ mod tests {
         assert!(set_from(settings, &dir));
         assert_eq!(terminal_theme().fg, Rgb(0x44, 0x55, 0x66));
         assert_eq!(terminal_theme().bg, rgb(&chrome["background"]));
+
+        // A layout's colors reach terminals too, and beat the person's for the same key.
+        let look = crate::layout::Look {
+            colors: Some([("terminal_foreground".to_string(), "#778899".to_string())].into()),
+            ..Default::default()
+        };
+        let mut layered = Settings::compose(&person, &look, true);
+        layered.terminal_theme = "paper".into();
+        assert_eq!(layered.colors["terminal_foreground"], "#778899");
+        assert!(set_from(layered, &dir));
+        assert_eq!(theme()["terminal_foreground"], "#778899");
+        assert_eq!(terminal_theme().fg, Rgb(0x77, 0x88, 0x99));
         std::fs::remove_dir_all(dir).unwrap();
     }
 

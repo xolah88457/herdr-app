@@ -808,12 +808,7 @@ impl AppWindow {
                         None => this.tend_terminals(false, window, cx),
                     }
                     if changed { this.sync(window, cx); }
-                    // In tiled mode other tabs can be on screen at their actual tile size.
-                    if this.workspace_tiling_active() {
-                        this.hidden_fit = pane_size::HiddenFit::Unknown;
-                    } else {
-                        this.fit_hidden_tabs(window, cx);
-                    }
+                    this.fit_hidden_tabs(window, cx);
                     this.flush_documents(refresh, window, cx);
                 }).is_err() { break; }
                 cx.background_executor().timer(Duration::from_millis(500)).await;

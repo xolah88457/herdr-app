@@ -40,7 +40,11 @@ fn inline_space_content(cx: &mut gpui::TestAppContext) {
             ));
             let original = serde_json::to_value(&web.root).unwrap();
             this.model.add_space_unshown("web", "Web", "", web);
-            assert!(this.place_workspace_tile("space", "web", "right"));
+            assert!(this.place_workspace_tile(
+                super::workspace_tiles::TileKind::Space,
+                "web",
+                super::workspace_tiles::Slot::RIGHT
+            ));
             this.sync(window, cx);
             let (terms, mods) = this.visible();
             for (pane, address) in [("api-pane", "t1"), ("web-pane", "t2")] {

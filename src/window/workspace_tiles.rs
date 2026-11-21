@@ -13,20 +13,18 @@ impl Slot {
             size(area.size.width * half(self.w), area.size.height * half(self.h)))
     }
 
-    pub(super) fn parse(name: &str) -> Option<Self> {
-        let (x, y, w, h) = match name {
-            "left" => (0, 0, 1, 2),
-            "right" => (1, 0, 1, 2),
-            "top" => (0, 0, 2, 1),
-            "bottom" => (0, 1, 2, 1),
-            "top-left" => (0, 0, 1, 1),
-            "top-right" => (1, 0, 1, 1),
-            "bottom-left" => (0, 1, 1, 1),
-            "bottom-right" => (1, 1, 1, 1),
-            _ => return None,
-        };
-        Some(Self { x, y, w, h })
+    pub(super) const fn new(x: u8, y: u8, w: u8, h: u8) -> Self {
+        Self { x, y, w, h }
     }
+
+    pub(super) const LEFT: Self = Self::new(0, 0, 1, 2);
+    pub(super) const RIGHT: Self = Self::new(1, 0, 1, 2);
+    pub(super) const TOP: Self = Self::new(0, 0, 2, 1);
+    pub(super) const BOTTOM: Self = Self::new(0, 1, 2, 1);
+    pub(super) const TOP_LEFT: Self = Self::new(0, 0, 1, 1);
+    pub(super) const TOP_RIGHT: Self = Self::new(1, 0, 1, 1);
+    pub(super) const BOTTOM_LEFT: Self = Self::new(0, 1, 1, 1);
+    pub(super) const BOTTOM_RIGHT: Self = Self::new(1, 1, 1, 1);
 
     fn opposite(self) -> Self {
         Self { x: 2 - self.w - self.x, y: 2 - self.h - self.y, ..self }
@@ -34,6 +32,20 @@ impl Slot {
 
     fn overlaps(self, other: Self) -> bool {
         self.x < other.x + other.w && other.x < self.x + self.w && self.y < other.y + other.h && other.y < self.y + self.h
+    }
+}
+
+/// What a tile menu or drag carries: the model object being placed.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) enum TileKind { Space, Tab, Pane }
+
+impl TileKind {
+    pub(super) fn label(self) -> &'static str {
+        match self {
+            Self::Space => "space",
+            Self::Tab => "tab",
+            Self::Pane => "pane",
+        }
     }
 }
 
@@ -71,16 +83,14 @@ impl WorkspaceTiles {
         self.0.iter().any(|(o, _)| o == owner)
     }
 
-    fn place(&mut self, model: &mut Model, kind: &str, id: &str, placement: &str) -> bool {
-        let Some(slot) = Slot::parse(placement) else { return false };
+    fn place(&mut self, model: &mut Model, kind: TileKind, id: &str, slot: Slot) -> bool {
         let owner = match kind {
-            "space" => Owner::Space(id.to_owned()),
-            "pane" => Owner::Pane(id.to_owned()),
-            "tab" => match model.tab(id).and_then(Tab::focused_pane) {
+            TileKind::Space => Owner::Space(id.to_owned()),
+            TileKind::Pane => Owner::Pane(id.to_owned()),
+            TileKind::Tab => match model.tab(id).and_then(Tab::focused_pane) {
                 Some(pane) => Owner::Pane(pane),
                 None => return false,
             },
-            _ => return false,
         };
         if owner.root(model).is_none() { return false; }
         let current = owner.current(model);
@@ -139,8 +149,8 @@ impl WorkspaceTiles {
 
 impl AppWindow {
     /// Native menu/drop handlers sync the window after changing placements.
-    pub(super) fn place_workspace_tile(&mut self, kind: &str, id: &str, placement: &str) -> bool {
-        self.shows_tab() && self.workspace_tiles.place(&mut self.model, kind, id, placement)
+    pub(super) fn place_workspace_tile(&mut self, kind: TileKind, id: &str, slot: Slot) -> bool {
+        self.shows_tab() && self.workspace_tiles.place(&mut self.model, kind, id, slot)
     }
 
     pub(super) fn clear_workspace_tiles(&mut self) {
@@ -184,17 +194,34 @@ impl AppWindow {
 
 #[cfg(test)]
 mod tests {
-    use super::{Axis, Content, Model, Node, Slot, Tab, WorkspaceTiles, json};
+    use super::{Axis, Content, Model, Node, Slot, Tab, TileKind, WorkspaceTiles, json};
+
+    impl Slot {
+        /// Named placements keep the tests readable.
+        fn named(name: &str) -> Option<Self> {
+            Some(match name {
+                "left" => Self::LEFT,
+                "right" => Self::RIGHT,
+                "top" => Self::TOP,
+                "bottom" => Self::BOTTOM,
+                "top-left" => Self::TOP_LEFT,
+                "top-right" => Self::TOP_RIGHT,
+                "bottom-left" => Self::BOTTOM_LEFT,
+                "bottom-right" => Self::BOTTOM_RIGHT,
+                _ => return None,
+            })
+        }
+    }
 
     #[test]
     fn slot_coverage_and_opposites_match_all_eight_drop_positions() {
         let cells = [("top-left", 1), ("top-right", 2), ("bottom-left", 4), ("bottom-right", 8)];
         for (name, bits) in cells.into_iter().chain([("left", 5), ("right", 10), ("top", 3), ("bottom", 12)]) {
-            let slot = Slot::parse(name).unwrap();
+            let slot = Slot::named(name).unwrap();
             assert_eq!(slot.opposite().opposite(), slot);
             assert!(!slot.overlaps(slot.opposite()));
             for (corner, bit) in cells {
-                assert_eq!(slot.overlaps(Slot::parse(corner).unwrap()), bits & bit != 0, "{name}, {corner}");
+                assert_eq!(slot.overlaps(Slot::named(corner).unwrap()), bits & bit != 0, "{name}, {corner}");
             }
         }
     }
@@ -208,7 +235,7 @@ mod tests {
     }
 
     fn at<'a>(tiles: &WorkspaceTiles, model: &'a Model, placement: &str) -> Option<&'a Node> {
-        let slot = Slot::parse(placement)?;
+        let slot = Slot::named(placement)?;
         tiles.0.iter().find(|(_, s)| *s == slot)?.0.root(model)
     }
 
@@ -219,7 +246,7 @@ mod tests {
         assert!(model.split_with("server", Axis::Column, editor));
         model.focus_pane("shell");
         let mut tiles = WorkspaceTiles::default();
-        assert!(tiles.place(&mut model, "space", "web", "right"));
+        assert!(tiles.place(&mut model, TileKind::Space, "web", Slot::named("right").unwrap()));
         assert_eq!(model.focused_pane().as_deref(), Some("shell"));
         assert_eq!(at(&tiles, &model, "left").unwrap().id, "a");
         let root = at(&tiles, &model, "right").unwrap();
@@ -242,16 +269,16 @@ mod tests {
         m.split("tail", Axis::Row, "filter", "t5");
         m.focus_pane("shell");
         let mut tiles = WorkspaceTiles::default();
-        assert!(tiles.place(&mut m, "tab", "log", "top-right"));
+        assert!(tiles.place(&mut m, TileKind::Tab, "log", Slot::named("top-right").unwrap()));
         assert_eq!(at(&tiles, &m, "bottom-left").unwrap().id, "shell");
         assert_eq!(at(&tiles, &m, "top-right").unwrap().id, "filter");
-        assert!(!tiles.place(&mut m, "pane", "log", "top")); // not a pane
+        assert!(!tiles.place(&mut m, TileKind::Pane, "log", Slot::named("top").unwrap())); // not a pane
         m.focus_pane("filter");
         tiles.reconcile(&mut m);
-        assert!(tiles.place(&mut m, "pane", "filter", "right"));
+        assert!(tiles.place(&mut m, TileKind::Pane, "filter", Slot::named("right").unwrap()));
         assert!(at(&tiles, &m, "top-right").is_none());
         assert_eq!(tiles.0.len(), 2);
-        assert!(tiles.place(&mut m, "pane", "tail", "top-right")); // overlaps the active half
+        assert!(tiles.place(&mut m, TileKind::Pane, "tail", Slot::named("top-right").unwrap())); // overlaps the active half
         assert_eq!(m.focused_pane().as_deref(), Some("tail"));
         assert_eq!(tiles.0.len(), 2);
         m.focus_pane("server"); // leave the arrangement
@@ -265,9 +292,8 @@ mod tests {
     fn closing_one_of_two_tiles_shows_the_survivor_normally() {
         let mut m = spaces();
         let mut tiles = WorkspaceTiles::default();
-        assert!(tiles.place(&mut m, "space", "web", "top"));
-        assert!(!tiles.place(&mut m, "space", "missing", "bottom"));
-        assert!(!tiles.place(&mut m, "space", "db", "offscreen"));
+        assert!(tiles.place(&mut m, TileKind::Space, "web", Slot::named("top").unwrap()));
+        assert!(!tiles.place(&mut m, TileKind::Space, "missing", Slot::named("bottom").unwrap()));
         m.remove_space("api");
         m.active = Some("db".into()); // fallback chosen by the model
         tiles.reconcile(&mut m);
@@ -280,11 +306,11 @@ mod tests {
     fn a_lone_tile_is_refused_and_a_split_pane_joins_its_tile() {
         let mut m = spaces();
         let mut tiles = WorkspaceTiles::default();
-        assert!(!tiles.place(&mut m, "space", "api", "left")); // the active owner alone
+        assert!(!tiles.place(&mut m, TileKind::Space, "api", Slot::named("left").unwrap())); // the active owner alone
         assert!(tiles.0.is_empty());
         m.add_tab("api", Tab::new("log", "", "tail", "t4"));
         m.focus_pane("shell");
-        assert!(tiles.place(&mut m, "tab", "log", "top-right"));
+        assert!(tiles.place(&mut m, TileKind::Tab, "log", Slot::named("top-right").unwrap()));
         m.split("shell", Axis::Row, "shell2", "t6");
         m.focus_pane("shell2");
         tiles.reconcile(&mut m);

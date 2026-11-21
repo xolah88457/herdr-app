@@ -200,6 +200,11 @@ impl AppWindow {
     /// redraw. Once the window settles (the same at two ticks), they are sized as their
     /// panes would be, so the programs redraw out of sight.
     pub(super) fn fit_hidden_tabs(&mut self, window: &Window, cx: &App) {
+        // In tiled mode other tabs can be on screen at their actual tile size.
+        if self.workspace_tiling_active() {
+            self.hidden_fit = HiddenFit::Unknown;
+            return;
+        }
         let Some((_, area)) = self.context_area() else { return };
         let cell = crate::terminal::cell_size(window);
         let now = (area, cell);
