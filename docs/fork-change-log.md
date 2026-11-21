@@ -94,15 +94,16 @@ bun test scripts/new-menu.test.ts scripts/tabs.test.ts scripts/taskboard.test.ts
 python3 -m unittest discover -s integrations/pi-tmux -p 'test_*.py'
 
 # B: use the top-level regression that starts the guarded child process.
-cargo test --locked --bin herdr-app shipped_row_pointer_drags -- --nocapture
+cargo test --locked shipped_row_pointer_drags -- --nocapture
 
 # C: settings plus BOTH real launch paths. Requires a logged-in macOS desktop,
 # local hc/Pi (and tmux for tmux mode), a compatible source package and a
 # standalone Herdr binary. Do not copy the signed executable out of an installed .app.
 bun test scripts/new-menu.test.ts scripts/settings.test.ts
+app=/path/to/standalone/herdr-app
 for mode in native tmux; do
   python3 scripts/pi-native-panes-smoke.py /path/to/pi-merged \
-    --herdr-app /path/to/standalone/herdr-app --backend "$mode"
+    --herdr-app "$app" --backend "$mode"
 done
 ```
 
