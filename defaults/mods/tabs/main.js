@@ -122,7 +122,7 @@ export default class Tabs extends View {
     }
     if (this.panels[space.id] === now) return;
     this.panels[space.id] = now;
-    localStorage.setItem("panels", JSON.stringify(this.panels));
+    try { localStorage.setItem("panels", JSON.stringify(this.panels)); } catch {}
   }
 
   render() {

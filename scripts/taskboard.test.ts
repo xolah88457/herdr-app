@@ -156,7 +156,7 @@ for (const message of ["cannot start tsk: program not found", "cannot run tsk: N
   found = true;
   h.refresh();
   await h.pending[1];
-  expect(text(h.render())).toContain("No tasks to show.");
+  expect(text(h.render())).toContain("No open tasks.");
   expect(find(h.render(), "taskboard-open")).toBeDefined();
 });
 
@@ -164,7 +164,7 @@ test("a missing or relative working folder never runs an unscoped query", () => 
   const h = harness(async () => { throw new Error("should not start a process"); });
   for (const space of [undefined, { ...local, folder: "" }, { ...local, folder: "src" }]) {
     h.switchTo(space);
-    expect(text(h.render())).toContain("absolute folder path");
+    expect(text(h.render())).toContain("needs a space with a folder");
     expect(find(h.render(), "taskboard-open")).toBeUndefined();
   }
   expect(h.pending).toHaveLength(0);
@@ -268,5 +268,50 @@ test("Tasks stays on for saved panel lists, and workspace.tasks=false turns it o
     });
     view.init();
     expect(Boolean(find(view.render(), "panel-taskboard"))).toBe(shown);
+  }
+});
+
+test("both task lists load concurrently", async () => {
+  const started: string[] = [];
+  const release: (() => void)[] = [];
+  const h = harness(async (_program, args) => {
+    started.push(args.includes("--done") ? "done" : "open");
+    await new Promise<void>(resolve => release.push(resolve));
+    return ok("[]");
+  });
+  h.render();
+  await Promise.resolve();
+  expect(started.sort()).toEqual(["done", "open"]);
+  release.forEach(r => r());
+  await h.pending[0];
+});
+
+test("looking at a stale board again reloads it; a fresh, loading or hidden one does not", async () => {
+  let calls = 0;
+  const h = harness(async () => { calls++; return ok("[]"); });
+  const realNow = Date.now;
+  try {
+    let now = 1_000_000;
+    Date.now = () => now;
+    h.render();
+    expect(calls).toBe(2);
+    await h.pending[0];
+    h.render();
+    expect(h.pending).toHaveLength(1); // fresh: no reload
+    now += 11_000;
+    h.setLayout({ id: "root", children: [{ id: "panel", hidden: true, children: [{ id: "panel-body", active: "taskboard" }] }] });
+    h.render();
+    expect(h.pending).toHaveLength(1); // hidden: no reload
+    h.setLayout(null);
+    h.render();
+    expect(h.pending).toHaveLength(2); // shown again and stale: reload
+    expect(calls).toBe(4);
+    h.render();
+    expect(h.pending).toHaveLength(2); // already loading
+    await h.pending[1];
+    h.render();
+    expect(h.pending).toHaveLength(2); // just loaded
+  } finally {
+    Date.now = realNow;
   }
 });

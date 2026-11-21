@@ -202,10 +202,10 @@ only when expanded.
 
 Panel switches are shared keys: `workspace.panels` (a list) controls Files and
 Changes; `workspace.tasks` (on unless `false`) controls Tasks, which also needs
-a layout with a `taskboard` block. The welcome flow has a Tasks card.
+a layout with a `taskboard` block. The welcome flow has a Tasks card when the layout has one.
 The `taskboard` mod reads `tsk list --json` and `tsk list --json --done` in the
 space's folder on its machine (Git project, or tsk's Desk outside Git).
-**Refresh** rereads the board; **Open tsk** starts the upstream TUI there to
+The board reloads when the space or its folder changes and when it is shown again after about 10 seconds. **Refresh** rereads it at once; **Open tsk** starts the upstream TUI there to
 edit it. Install `tsk` on that machine; Herdr does not install or maintain a
 second task store.
 

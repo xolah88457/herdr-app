@@ -7,6 +7,7 @@ const STATUSES = [
   ["blocked", "Blocked", "blocked"], ["review", "Review", "accent"], ["done", "Done", "done"],
 ];
 const FOLDER_DELAY = 400;
+const STALE = 10000;
 function find(node, id) {
   if (node?.id === id) return node;
   for (const child of node?.children ?? []) { const found = find(child, id); if (found) return found; }
@@ -43,7 +44,7 @@ export default class Taskboard extends View {
 
   // The panel is alive while hidden or behind another panel; only a shown board needs tasks.
   visible() {
-    const panel = find(layout(), "panel"), body = find(layout(), "panel-body");
+    const tree = layout(), panel = find(tree, "panel"), body = find(tree, "panel-body");
     return !panel || (!panel.hidden && (!body || body.active === "taskboard"));
   }
 
@@ -69,12 +70,11 @@ export default class Taskboard extends View {
     cx.spawn(async cx => {
       try {
         // Like the interactive board, tsk list picks the repo or Desk from its cwd.
-        const tasks = await list(options);
-        if (!this.current(state)) return;
-        const done = await list(options, true);
+        const [tasks, done] = await Promise.all([list(options), list(options, true)]);
         if (!this.current(state)) return;
         state.rows = rowsFor([...tasks, ...done]);
         state.folder = options.cwd;
+        state.at = Date.now();
         state.error = undefined;
       } catch (error) {
         if (!this.current(state)) return;
@@ -100,15 +100,18 @@ export default class Taskboard extends View {
 
   render(cx) {
     const space = active();
-    if (this.state?.key !== key(space)) this.refresh(cx);
+    const shown = this.state;
+    if (shown?.key !== key(space)) this.refresh(cx);
+    // Render only runs when something notifies: looking at a stale board again reloads it (not polling).
+    else if (shown.at && !shown.loading && Date.now() - shown.at > STALE && this.visible()) this.refresh(cx);
     const state = this.state ?? { rows: [] }, t = theme();
     const { rows, loading, folder, error } = state;
     const listId = "taskboard-list";
     const button = (id, label, action) => div().id(id).px(7).h(26).flex_none().flex().items_center().rounded(6)
       .text_size(12).text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground))
       .cursor_pointer().on_click(action).child(label);
-    let message = loading ? "Loading tasks…" : "No tasks to show.";
-    if (!absolute(space?.folder)) message = "Open a space with an absolute folder path.";
+    let message = loading ? "Loading tasks…" : "No open tasks.";
+    if (!absolute(space?.folder)) message = "Tasks needs a space with a folder.";
     if (error) message = error;
     return v_flex().size_full().min_h(0).rounded(10).overflow_hidden().bg(t.background)
       .border_1().border_color(t.border).text_color(t.foreground).text_size(13)

@@ -115,6 +115,12 @@ export default class Welcome extends View {
     return shared("workspace.tasks") === false ? files : [...files, "taskboard"];
   }
 
+  // Tasks is offered only when the active layout has a taskboard block (the rule the tab bar uses).
+  offered() {
+    const hasTasks = find(layout(), "panel-body")?.children?.some((c) => c.id === "taskboard");
+    return PANELS.filter((p) => p.id !== "taskboard" || hasTasks);
+  }
+
   togglePanel(id) {
     const on = this.panels().includes(id);
     const next = on ? this.panels().filter((x) => x !== id) : [...this.panels(), id];
@@ -404,7 +410,7 @@ export default class Welcome extends View {
     return v_flex()
       .gap(14)
       .child(this.title(t, "Choose your panels", "Herdr comes with a couple of panels. Turn one on and it appears beside your terminals. Drag this window aside to see it. Later, the buttons in the tab bar open and close them."))
-      .children(PANELS.map((p) => this.panelCard(t, p)))
+      .children(this.offered().map((p) => this.panelCard(t, p)))
       .child(
         h_flex()
           .gap(10)
