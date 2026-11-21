@@ -119,6 +119,11 @@ test("an unnamed tab follows a useful live agent title", () => {
   expect(label(unnamed, { ...claude, title: "[ ! ] ✹  Fix handler\nwith @scope/pkg" })).toBe("Fix handler with @scope/pkg");
 });
 
+test("titles are cleaned like the agents mod: emoji kept, glyph before a Codex mark dropped", () => {
+  expect(label(unnamed, { ...claude, title: "🔴 login" })).toBe("🔴 login");
+  expect(label(unnamed, { ...claude, title: "● [ ! ] x" })).toBe("x");
+});
+
 test("a non-task OSC title keeps the program label", () => {
   const generic = ["", "12", "✦", "Claude Code", "CLAUDE", "New session", "Untitled", "t2", "remote/t2", "api", "me@build-box:~/src/api", "~/src/api", "✦ /tmp", "C:/src/api", "✦ C:\\src\\api", "[ . ] \\\\server\\api"];
   for (const title of generic) {
@@ -126,8 +131,10 @@ test("a non-task OSC title keeps the program label", () => {
   }
 });
 
-test("an explicit tab title wins even when it matches its program or positional name", () => {
-  for (const name of ["Claude Code", "2", "fix login"]) expect(label({ name, named: true }, claude)).toBe(name);
+test("an explicit tab title wins, except the program's own name from older saves", () => {
+  for (const name of ["2", "fix login"]) expect(label({ name, named: true }, claude)).toBe(name);
+  expect(label({ name: "Claude Code", named: true }, claude)).toBe("My task");
+  expect(label({ name: "Claude Code", named: true }, { ...claude, title: "" })).toBe("Claude Code");
 });
 
 test("unnamed tabs use foreground program, meaningful folder and branch, and safe fallbacks", () => {
@@ -157,9 +164,9 @@ test("tab render follows the first agent over other splits and stops when rename
   expect(renderedName()).toBe("My task");
   lead.title = "Rewrite parser";
   expect(renderedName()).toBe("Rewrite parser");
-  tab.name = "Claude Code";
+  tab.name = "My notes";
   tab.named = true;
-  expect(renderedName()).toBe("Claude Code");
+  expect(renderedName()).toBe("My notes");
   tab.named = false;
   expect(renderedName()).toBe("Rewrite parser");
   snapshot.panes.splice(2);

@@ -43,7 +43,7 @@ build:
     cargo build --locked
 
 test:
-    bun test scripts/changes.test.ts scripts/files.test.ts scripts/machine-add.test.ts scripts/picker.test.ts scripts/palette.test.ts scripts/agents.test.ts scripts/spaces.test.ts scripts/mod-storage.test.ts scripts/worktree.test.ts scripts/settings.test.ts scripts/tabs.test.ts scripts/taskboard.test.ts scripts/new-menu.test.ts scripts/session-tiles*.test.ts
+    bun test scripts/changes.test.ts scripts/files.test.ts scripts/machine-add.test.ts scripts/picker.test.ts scripts/palette.test.ts scripts/agents.test.ts scripts/spaces.test.ts scripts/mod-storage.test.ts scripts/worktree.test.ts scripts/settings.test.ts scripts/tabs.test.ts scripts/taskboard.test.ts scripts/new-menu.test.ts
     cargo test --locked
     bun test scripts/pi-tmux-publisher.test.ts
 

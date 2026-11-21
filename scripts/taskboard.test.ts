@@ -46,21 +46,25 @@ type Exec = (program: string, args: string[], options: { cwd: string; on: string
 const local: Location = { id: "one", machine: null, folder: "/code/one/src" };
 const remote: Location = { id: "remote/two", machine: "remote", folder: "/code/two/src" };
 const ok = (stdout: string) => ({ code: 0, stdout, stderr: "" });
+let layoutTree: unknown = null;
 function harness(exec: Exec) {
+  layoutTree = null;
   let space: Location | undefined = local;
   const pending: Promise<void>[] = [], commands: unknown[] = [];
   const view = make(board, {
-    checking: () => false, spaces: () => space ? [{ ...space, active: true }] : [], exec,
+    checking: () => false, layout: () => layoutTree, spaces: () => space ? [{ ...space, active: true }] : [], exec,
     run: (...args: unknown[]) => commands.push(args), Scrollbar: { vertical: element },
     v_virtual_list: (_id: string, len: number, _height: number, _key: unknown, render: Function) =>
       element().children(render({ start: 0, end: len })),
   });
   let notifications = 0;
-  const cx = { spawn: (task: (cx: unknown) => Promise<void>) => pending.push(task(cx)), notify() { notifications++; } };
+  const timers: (() => void)[] = [];
+  const cx = { spawn: (task: (cx: unknown) => Promise<void>) => pending.push(task(cx)), notify() { notifications++; },
+    timer: { after: (_ms: number, task: (cx: unknown) => void) => timers.push(() => task(cx)) } };
   const renderCx = { ...cx, notify() { throw new Error("notify is not allowed during render"); } };
   return {
     switchTo: (next?: Location) => { space = next; }, render: (): Element => view.render(renderCx),
-    refresh: () => view.refresh(cx), pending, commands, notifications: () => notifications,
+    refresh: () => view.refresh(cx), pending, timers, setLayout: (tree: unknown) => { layoutTree = tree; }, commands, notifications: () => notifications,
   };
 }
 
@@ -75,7 +79,7 @@ test("Tasks toggles the default side panel and restores each space's panel", () 
   const view = make(tabs, {
     svg: element, image: element, ScrollHandle: { new: () => ({}) }, spaces: () => [{ id, active: true }],
     panes: () => [], openOverlay() {}, window: () => null, settings: () => ({ zoom: 1 }), layout: () => tree,
-    shared: () => ["files", "changes"], localStorage: { getItem: store.get.bind(store), setItem: store.set.bind(store) },
+    shared: (k: string) => k === "workspace.panels" ? ["files", "changes"] : undefined, localStorage: { getItem: store.get.bind(store), setItem: store.set.bind(store) },
     run(command: string, args: { child?: string }) {
       if (command === "layout.select") body.active = args.child;
       if (command === "layout.show") panel.hidden = false;
@@ -135,17 +139,18 @@ test("a late local task response cannot replace a remote space's board or launch
   expect(h.commands).toEqual([["tab.new", { name: "tsk", space: remote.id, folder: remote.folder, argv: ["tsk"] }]]);
 });
 
-test("missing tsk is actionable, and refresh retries without launching a terminal", async () => {
+// The core words a missing program and a deleted working folder differently (ENOENT either way).
+for (const message of ["cannot start tsk: program not found", "cannot run tsk: No such file or directory (os error 2)"]) test(`missing tsk or folder (${message}) is actionable, and refresh retries without launching a terminal`, async () => {
   let found = false;
   const h = harness(async () => {
-    if (!found) throw new Error("cannot start tsk: program not found");
+    if (!found) throw new Error(message);
     return ok("[]");
   });
   h.switchTo(remote);
   h.render();
   await h.pending[0];
   const failed = h.render();
-  expect(text(failed)).toContain("tsk not found on remote. Install it and put it on PATH, then refresh.");
+  expect(text(failed)).toContain("tsk not found on remote, or the folder no longer exists.");
   expect(find(failed, "taskboard-open")).toBeUndefined();
   expect(h.commands).toEqual([]);
   found = true;
@@ -213,5 +218,55 @@ test.skipIf(!tsk)("real tsk picks the repo from a nested cwd and Desk from a non
     ]);
   } finally {
     rmSync(area, { recursive: true, force: true });
+  }
+});
+
+test("a folder change in the same space waits, then loads once; the folder stays during a manual refresh", async () => {
+  const cwds: string[] = [];
+  const h = harness(async (_program, args, options) => {
+    if (!args.includes("--done")) cwds.push(options.cwd);
+    return ok(args.includes("--done") ? "[]" : '[{"number":1,"status":"open","title":"A"}]');
+  });
+  h.render();
+  await h.pending[0];
+  expect(text(h.render())).toContain("/code/one/src");
+  // Manual refresh keeps the folder line and Open button while it reloads.
+  h.refresh();
+  const reloading = h.render();
+  expect(text(reloading)).toContain("/code/one/src");
+  expect(find(reloading, "taskboard-open")).toBeDefined();
+  await h.pending[1];
+  // cd, cd, cd: nothing runs until the delay, then only the last folder.
+  for (const folder of ["/code/one/a", "/code/one/b", "/code/one/c"]) { h.switchTo({ ...local, folder }); h.render(); }
+  expect(h.pending).toHaveLength(2);
+  h.timers.forEach(fire => fire());
+  await Promise.all(h.pending);
+  expect(cwds.slice(2)).toEqual(["/code/one/c"]);
+});
+
+test("a hidden Tasks panel does not refresh", () => {
+  const h = harness(async () => ok("[]"));
+  h.setLayout({ id: "root", children: [{ id: "panel", hidden: true, children: [{ id: "panel-body", active: "taskboard" }] }] });
+  h.render();
+  expect(h.pending).toHaveLength(0);
+  h.setLayout({ id: "root", children: [{ id: "panel", children: [{ id: "panel-body", active: "files" }] }] });
+  h.render();
+  expect(h.pending).toHaveLength(0);
+  h.setLayout({ id: "root", children: [{ id: "panel", children: [{ id: "panel-body", active: "taskboard" }] }] });
+  h.render();
+  expect(h.pending).toHaveLength(1);
+});
+
+test("Tasks stays on for saved panel lists, and workspace.tasks=false turns it off", () => {
+  for (const [tasks, shown] of [[undefined, true], [true, true], [false, false]] as const) {
+    const tree = structuredClone(main);
+    const view = make(tabs, {
+      svg: element, image: element, ScrollHandle: { new: () => ({}) }, spaces: () => [{ id: "one", active: true }],
+      panes: () => [], openOverlay() {}, window: () => null, settings: () => ({ zoom: 1 }), layout: () => tree,
+      shared: (k: string) => k === "workspace.panels" ? ["files"] : k === "workspace.tasks" ? tasks : undefined,
+      localStorage: { getItem: () => null, setItem() {} }, run() {},
+    });
+    view.init();
+    expect(Boolean(find(view.render(), "panel-taskboard"))).toBe(shown);
   }
 });

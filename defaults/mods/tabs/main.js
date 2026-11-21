@@ -31,11 +31,16 @@ function folderName(cwd) {
   return unixPath.test(cwd) ? cwd.split("/").filter(Boolean).at(-1) ?? "" : "";
 }
 
+// Keep in sync with agents mod clean (defaults/mods/agents/main.js): drops what an agent
+// puts before its title (a status glyph or spinner, Codex's "[ ! ] " / "[ . ] " mark), stopping
+// at an opening bracket or quote and at an emoji ("🔴 login") a person put there. Mods cannot
+// import each other, so this is a copy. Differences: path starts (. / ~ \) survive so
+// the path filter below sees them, and the glyphs are stripped again after the mark ("● [ ! ] x").
+const glyphs = (s) => s.replace(/^[^\p{L}\p{N}\p{Ps}\p{Pi}\p{Emoji_Presentation}./~\\]+/u, "");
+const clean = (s) => glyphs(glyphs((s ?? "").replace(/\s+/g, " ").trim()).replace(/^\[ [!.] \] /, "")).trim();
+
 function agentTitle(lead, folder) {
-  // Drop status glyphs, keeping leading brackets or quotes. Keep path prefixes
-  // until after filtering out titles that are just paths or shell prompts.
-  const live = (lead.title ?? "").replace(/\s+/g, " ").trim().replace(/^\[ [!.] \] /, "")
-    .replace(/^[^\p{L}\p{N}\p{Ps}\p{Pi}./~\\]+/u, "");
+  const live = clean(lead.title);
   if (!/[\p{L}\p{N}]/u.test(live) || /^\p{N}+$/u.test(live) || windowsPath.test(live) || unixPath.test(live) || /^\.{1,2}[\\/]/.test(live)) return "";
   if (/^[\p{L}\p{N}_.-]+@[\p{L}\p{N}_.-]+(?:[:\s]|$)/u.test(live)) return "";
   const { key, name } = lead.program;
@@ -43,10 +48,11 @@ function agentTitle(lead, folder) {
   return generic.some(s => fold(s) === fold(live)) ? "" : live;
 }
 
-// A label is derived at render time. Never write it back: `named` is the
-// authority even when a person deliberately chooses the program's name.
+// A label is derived at render time. Never write it back. An explicit name wins,
+// except one equal to the program's name: older versions saved that as `named`
+// when the menu passed the agent's name, and it should keep following the agent title.
 function label(tab, lead, space) {
-  if (tab.named) return tab.name;
+  if (tab.named && !(lead?.program?.name && fold(tab.name) === fold(lead.program.name))) return tab.name;
   if (lead?.mod) return lead.name || lead.title || lead.mod;
   const folder = folderName(lead?.cwd);
   const task = lead?.program?.agent && agentTitle(lead, folder);
@@ -164,10 +170,11 @@ export default class Tabs extends View {
       ? Math.max(10, (root.traffic_lights[0] + 64) / settings().zoom - (sidebar?.hidden ? 0 : sidebar?.size?.px ?? 0))
       : 10;
     const panel = find(root, "panel"), body = find(root, "panel-body");
-    const chosen = shared("workspace.panels") ?? ["files", "changes"];
-    // The welcome choices cover Files and Changes. Tasks is available when the layout has it.
+    // `workspace.panels` picks Files and Changes. Tasks is on unless `workspace.tasks` is false
+    // (so lists saved before it existed keep it), and needs the layout's block.
     const hasTasks = body?.children?.some(child => child.id === "taskboard");
-    const enabled = hasTasks ? [...chosen, "taskboard"] : chosen;
+    const chosen = (shared("workspace.panels") ?? ["files", "changes"]).filter(id => id !== "taskboard");
+    const enabled = hasTasks && shared("workspace.tasks") !== false ? [...chosen, "taskboard"] : chosen;
     this.syncPanel(space, panel, body, enabled);
     const panelButton = (id, label, icon) => {
       const on = panel && !panel.hidden && body?.active === id;
@@ -180,7 +187,7 @@ export default class Tabs extends View {
         }).child(svg(icon).size(14)).child(label);
     };
     return h_flex().id("tabs-release").size_full().min_w(0).px(10).pl(lightsPadding).gap(3).items_center().bg(t.chrome).border_b(1).border_color(t.border)
-      .on_mouse_up("left", () => { this.pressed = null; })
+      .on_mouse_up("left", () => { if (this.pressed === null) return; this.pressed = null; })
       .on_scroll_wheel(e => this.wheel(e))
       .child(h_flex().id("tab-scroll").flex_1().min_w(0).h_full().items_center().gap(3).overflow_x_scrollbar().track_scroll(this.scroll)
         .on_size_change((_size, cx) => { if (active >= 0) { this.scroll.scroll_to_item(active); cx.notify(); } })
@@ -188,7 +195,7 @@ export default class Tabs extends View {
       .child(button("tab-new", "+", () => openOverlay({ mod: "new-menu", kind: "popup", width: 250, height: 512 })))
       .when(enabled.includes("files"), el => el.child(panelButton("files", "Files", "mods/files/file.svg")))
       .when(enabled.includes("changes"), el => el.child(panelButton("changes", "Changes", "mods/changes/changes.svg")))
-      .when(Boolean(hasTasks), el => el.child(panelButton("taskboard", "Tasks", "mods/workspace-chrome/circle-check.svg")))
+      .when(enabled.includes("taskboard"), el => el.child(panelButton("taskboard", "Tasks", "mods/workspace-chrome/circle-check.svg")))
       .when(w?.buttons, el => el.child(button("minimize", w.platform === "windows" ? svg("mods/tabs/win-min.svg").size(16) : "−", () => run("window.minimize")))
         .child(button("maximize", w.platform === "windows" ? svg(`mods/tabs/${w.maximized ? "win-restore" : "win-max"}.svg`).size(16) : "□", () => run("window.maximize")))
         .child(button("close-window", w.platform === "windows" ? svg("mods/tabs/win-close.svg").size(16) : svg("mods/pane/close.svg").size(13), () => run("window.close"))));

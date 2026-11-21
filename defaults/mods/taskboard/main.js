@@ -1,11 +1,17 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, Scrollbar, v_virtual_list } from "gpui-base";
-import { checking, spaces, exec, run, theme } from "herdr";
+import { checking, spaces, exec, run, theme, layout } from "herdr";
 
 const STATUSES = [
   ["started", "Started", "working"], ["ready", "Ready", "accent"], ["open", "Open", "muted"],
   ["blocked", "Blocked", "blocked"], ["review", "Review", "accent"], ["done", "Done", "done"],
 ];
+const FOLDER_DELAY = 400;
+function find(node, id) {
+  if (node?.id === id) return node;
+  for (const child of node?.children ?? []) { const found = find(child, id); if (found) return found; }
+  return null;
+}
 const active = () => spaces().find(s => s.active);
 const key = space => JSON.stringify([space?.id, space?.machine, space?.folder]);
 const absolute = path => /^(?:\/|[a-z]:[\\/]|\\\\[^\\])/i.test(path ?? "");
@@ -35,17 +41,31 @@ export default class Taskboard extends View {
     return this.state === state && state.key === key(active());
   }
 
+  // The panel is alive while hidden or behind another panel; only a shown board needs tasks.
+  visible() {
+    const panel = find(layout(), "panel"), body = find(layout(), "panel-body");
+    return !panel || (!panel.hidden && (!body || body.active === "taskboard"));
+  }
+
+  // A `cd` changes the folder many times a minute: the same space's new folder waits briefly.
   refresh(cx) {
-    if (checking()) return;
+    if (checking() || !this.visible()) return;
     const space = active(), context = key(space);
     if (this.state?.key === context && this.state.loading) return;
-    const rows = this.state?.key === context ? this.state.rows : [];
-    const state = { key: context, rows };
+    const before = this.state;
+    const same = before?.key === context;
+    const moved = !same && before?.space === space?.id && before?.machine === space?.machine;
+    const state = { key: context, space: space?.id, machine: space?.machine, rows: same ? before.rows : [], folder: same ? before.folder : undefined };
     this.state = state;
     if (!absolute(space?.folder)) return;
 
     const options = { cwd: space.folder, on: space.machine, timeout: 5000 };
     state.loading = true;
+    if (moved) cx.timer.after(FOLDER_DELAY, cx => { if (this.current(state)) this.load(state, options, cx); });
+    else this.load(state, options, cx);
+  }
+
+  load(state, options, cx) {
     cx.spawn(async cx => {
       try {
         // Like the interactive board, tsk list picks the repo or Desk from its cwd.
@@ -55,14 +75,17 @@ export default class Taskboard extends View {
         if (!this.current(state)) return;
         state.rows = rowsFor([...tasks, ...done]);
         state.folder = options.cwd;
+        state.error = undefined;
       } catch (error) {
         if (!this.current(state)) return;
         const detail = String(error);
+        // A missing program and a missing working folder both fail to start (ENOENT).
         const missing = /cannot (?:run|start) tsk(?:\.exe)?:.*(?:not found|no such file|cannot find|os error 2\b)/i.test(detail);
         state.error = missing
-          ? `tsk not found on ${space.machine ?? "this machine"}. Install it and put it on PATH, then refresh.`
+          ? `tsk not found on ${options.on ?? "this machine"}, or the folder no longer exists. Install tsk and put it on PATH, or open an existing folder, then refresh.`
           : `Cannot load tasks: ${detail.slice(0, 220)}`;
         state.rows = [];
+        state.folder = undefined;
       } finally {
         state.loading = false;
         if (this.current(state)) cx.notify();
