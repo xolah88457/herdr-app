@@ -123,20 +123,37 @@ jobs:
       - name: Check release packaging
         if: matrix.platform == 'linux-x86_64'
         run: python3 -m unittest discover -s scripts -p test_distribution.py
-      - name: Install Bun
-        if: matrix.platform == 'linux-x86_64'
-        run: curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4"
       - name: Check documentation
         if: matrix.platform == 'linux-x86_64'
         run: |
           ~/.bun/bin/bun test scripts/docs.test.ts
           ~/.bun/bin/bun scripts/docs.ts check
 
+  # Own job: pi-tmux needs tmux >= 3.4, newer than ubuntu-22.04's 3.2a.
+  mod-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Bun
+        timeout-minutes: 10
+        run: curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4"
+      - name: Mod and Pi integration tests
+        timeout-minutes: 10
+        run: |
+          command -v tmux >/dev/null || scripts/ci-apt tmux
+          PATH="$HOME/.bun/bin:$PATH" scripts/test-mods
+
   # Keep the required check name stable while requiring every platform.
   test:
-    needs: platform-tests
+    needs: [platform-tests, mod-tests]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - run: '[ "${{ needs.platform-tests.result }}" = success ]'
+      - run: '[ "${{ needs.platform-tests.result }}" = success ] && [ "${{ needs.mod-tests.result }}" = success ]'

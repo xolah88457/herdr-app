@@ -23,53 +23,23 @@ fn inline_space_content(cx: &mut gpui::TestAppContext) {
     );
     cx.update(|window, cx| {
         view.update(cx, |this, cx| {
-            this.model
-                .add_space("api", "API", "", Tab::new("api-tab", "", "api-pane", "t1"));
+            this.model.add_space("api", "API", "", Tab::new("api-tab", "", "api-pane", "t1"));
             let mut web = Tab::new("web-tab", "", "web-pane", "t2");
-            assert!(web.root.split(
-                "web-pane",
-                Axis::Column,
-                Node::block(
-                    "web-mod",
-                    Content::Mod {
-                        name: "proof".into(),
-                        props: json!({"marker":"web"}),
-                    }
-                ),
-                "web-split".into()
-            ));
+            assert!(web.root.split("web-pane", Axis::Column, Node::block("web-mod", Content::Mod { name: "proof".into(), props: json!({"marker":"web"}) }), "web-split".into()));
             let original = serde_json::to_value(&web.root).unwrap();
             this.model.add_space_unshown("web", "Web", "", web);
-            assert!(this.place_workspace_tile("space", "web", "right"));
+            assert!(this.place_workspace_tile(super::workspace_tiles::TileKind::Space, "web", super::workspace_tiles::Slot::RIGHT));
             this.sync(window, cx);
             let (terms, mods) = this.visible();
             for (pane, address) in [("api-pane", "t1"), ("web-pane", "t2")] {
                 assert!(terms.iter().any(|(id, addr)| id == pane && addr == address));
             }
-            assert!(
-                mods.iter()
-                    .any(|(id, instance)| id == "web-mod" && instance.props["marker"] == "web")
-            );
-            assert!(
-                this.overlays.is_empty(),
-                "placement belongs to the main workspace"
-            );
+            assert!(mods.iter().any(|(id, instance)| id == "web-mod" && instance.props["marker"] == "web"));
+            assert!(this.overlays.is_empty(), "placement belongs to the main workspace");
             this.clear_workspace_tiles();
             this.sync(window, cx);
             assert!(!this.visible().0.iter().any(|(_, addr)| addr == "t2"));
-            assert_eq!(
-                serde_json::to_value(
-                    &this
-                        .model
-                        .space("web")
-                        .unwrap()
-                        .tab("web-tab")
-                        .unwrap()
-                        .root
-                )
-                .unwrap(),
-                original
-            );
+            assert_eq!(serde_json::to_value(&this.model.space("web").unwrap().tab("web-tab").unwrap().root).unwrap(), original);
         })
     });
 }
@@ -113,10 +83,7 @@ fn workspace_row_gestures(cx: &mut gpui::TestAppContext) {
     let (view, cx) = open_window(
         cx,
         "spaces",
-        concat!(
-            include_str!("../../defaults/mods/spaces/main.js"),
-            "\nSpaces.prototype.refreshMachines = () => {};"
-        ),
+        concat!(include_str!("../../defaults/mods/spaces/main.js"), "\nSpaces.prototype.refreshMachines = () => {};"),
         json!({"id":"main","type":"block","content":{"tab":"active"}}),
     );
     cx.simulate_resize(size(px(1000.), px(600.)));
@@ -126,34 +93,15 @@ fn workspace_row_gestures(cx: &mut gpui::TestAppContext) {
             assert!(web.root.split(
                 "server",
                 Axis::Column,
-                Node::block(
-                    "inspector",
-                    Content::Mod {
-                        name: "unused-view".into(),
-                        props: json!({"key": "original"}),
-                    }
-                ),
+                Node::block("inspector", Content::Mod { name: "unused-view".into(), props: json!({"key": "original"}) }),
                 "web-split".into()
             ));
             this.model.add_space("web", "Web", "", web);
             let mut logs = Tab::new("logs-tab", "Logs", "tail", "t2");
-            assert!(logs.root.split(
-                "tail",
-                Axis::Row,
-                Node::block(
-                    "filter",
-                    Content::Terminal {
-                        terminal: "t3".into()
-                    }
-                ),
-                "logs-split".into()
-            ));
+            assert!(logs.root.split("tail", Axis::Row, Node::block("filter", Content::Terminal { terminal: "t3".into() }), "logs-split".into()));
             logs.focus("filter");
             this.model.add_space("api", "API", "", logs);
-            assert!(
-                this.model
-                    .add_tab("api", Tab::new("main-tab", "Home", "shell", "t4"))
-            );
+            assert!(this.model.add_tab("api", Tab::new("main-tab", "Home", "shell", "t4")));
             this.documents.entry(String::new()).or_default().available = true; // Allow row reorder commands on the offline model.
             this.sync(window, cx); // Publish the spaces before the sidebar takes its initial snapshot.
             this.chrome = serde_json::from_value(json!({"id":"root","type":"row","children":[
@@ -175,24 +123,13 @@ fn workspace_row_gestures(cx: &mut gpui::TestAppContext) {
         }
         let b = this.bounds.borrow();
         // Interior of the first space under the heading and the first tab label.
-        (
-            b["sidebar"].origin + point(px(40.), px(46.)),
-            point(b["strip"].left() + px(26.), b["strip"].center().y),
-            b["main"],
-        )
+        (b["sidebar"].origin + point(px(40.), px(46.)), point(b["strip"].left() + px(26.), b["strip"].center().y), b["main"])
     });
     let trees = |this: &super::AppWindow| {
         this.model
             .spaces
             .iter()
-            .flat_map(|s| {
-                s.tabs.iter().map(|t| {
-                    (
-                        (s.id.clone(), t.id.clone()),
-                        serde_json::to_value(&t.root).unwrap(),
-                    )
-                })
-            })
+            .flat_map(|s| s.tabs.iter().map(|t| ((s.id.clone(), t.id.clone()), serde_json::to_value(&t.root).unwrap())))
             .collect::<std::collections::BTreeMap<_, _>>()
     };
     let originals = view.update(cx, |this, _| trees(this));
@@ -204,10 +141,7 @@ fn workspace_row_gestures(cx: &mut gpui::TestAppContext) {
         for end in [main.center(), outside] {
             drag(cx, start, end);
             view.update(cx, |this, _| {
-                assert!(
-                    !this.workspace_tiling_active(),
-                    "canceled drag from {start:?} to {end:?}"
-                );
+                assert!(!this.workspace_tiling_active(), "canceled drag from {start:?} to {end:?}");
                 assert_eq!(this.model.focused_pane().as_deref(), Some("shell"));
                 assert_eq!(trees(this), originals);
             });
@@ -220,20 +154,8 @@ fn workspace_row_gestures(cx: &mut gpui::TestAppContext) {
     drag(cx, space, other_space);
     drag(cx, tab, other_tab);
     view.update(cx, |this, _| {
-        assert_eq!(
-            this.model.spaces.iter().map(|s| &*s.id).collect::<Vec<_>>(),
-            ["api", "web"]
-        );
-        assert_eq!(
-            this.model
-                .space("api")
-                .unwrap()
-                .tabs
-                .iter()
-                .map(|t| &*t.id)
-                .collect::<Vec<_>>(),
-            ["main-tab", "logs-tab"]
-        );
+        assert_eq!(this.model.spaces.iter().map(|s| &*s.id).collect::<Vec<_>>(), ["api", "web"]);
+        assert_eq!(this.model.space("api").unwrap().tabs.iter().map(|t| &*t.id).collect::<Vec<_>>(), ["main-tab", "logs-tab"]);
         assert_eq!(this.model.focused_pane().as_deref(), Some("shell"));
         assert_eq!(trees(this), originals);
     });
@@ -258,8 +180,8 @@ fn workspace_row_gestures(cx: &mut gpui::TestAppContext) {
         draw(cx);
         cx.update(|window, _| {
             let accent = super::c("accent");
-            let previews: Vec<_> = window.painted_quads().into_iter().filter(|q| q.border_color == accent
-                && q.background == gpui::Background::from(accent.opacity(0.22))).map(|q| q.bounds).collect();
+            let previews: Vec<_> =
+                window.painted_quads().into_iter().filter(|q| q.border_color == accent && q.background == gpui::Background::from(accent.opacity(0.22))).map(|q| q.bounds).collect();
             assert_eq!(previews, expected.map(|b| b.scale(window.scale_factor())).into_iter().collect::<Vec<_>>());
         });
     }
@@ -268,12 +190,7 @@ fn workspace_row_gestures(cx: &mut gpui::TestAppContext) {
     view.update(cx, |this, _| {
         let roots: Vec<_> = this.workspace_roots().collect();
         for id in ["main-tab", "web-tab"] {
-            assert!(
-                roots
-                    .iter()
-                    .any(|&r| std::ptr::eq(r, &this.model.tab(id).unwrap().root)),
-                "original {id} must be drawn"
-            );
+            assert!(roots.iter().any(|&r| std::ptr::eq(r, &this.model.tab(id).unwrap().root)), "original {id} must be drawn");
         }
         let b = this.bounds.borrow();
         assert_eq!(b["web-tab"].left(), main.center().x);
@@ -284,13 +201,7 @@ fn workspace_row_gestures(cx: &mut gpui::TestAppContext) {
     view.update(cx, |this, _| {
         let roots: Vec<_> = this.workspace_roots().collect();
         for id in ["shell", "filter"] {
-            assert!(
-                roots.iter().any(|&r| std::ptr::eq(
-                    r,
-                    this.model.tab_of(id).unwrap().root.find(id).unwrap()
-                )),
-                "original {id} must be drawn"
-            );
+            assert!(roots.iter().any(|&r| std::ptr::eq(r, this.model.tab_of(id).unwrap().root.find(id).unwrap())), "original {id} must be drawn");
         }
         let b = this.bounds.borrow();
         assert_eq!(b["filter"].top(), main.center().y); // No extra tile caption above the pane header.
@@ -308,14 +219,10 @@ fn dragging_squeezed_layout_blocks_never_crashes() {
 fn squeezed_layout_drag(cx: &mut gpui::TestAppContext) {
     use gpui::{point, px, size};
     use serde_json::json;
-    if !running_alone("squeezed_layout_drag") {
-        return;
-    }
-    let block = |id: &str, height: f32| {
-        json!({
-            "id": id, "type": "block", "size": {"px": height}, "content": {"mod": "drag-probe"}
-        })
-    };
+    if !running_alone("squeezed_layout_drag") { return; }
+    let block = |id: &str, height: f32| json!({
+        "id": id, "type": "block", "size": {"px": height}, "content": {"mod": "drag-probe"}
+    });
     let layout = json!({"id": "root", "type": "row", "children": [
         {"id": "sidebar", "type": "column", "size": {"px": 268}, "resizable": false, "children": [
             block("brand", 46.0), block("button", 52.0),
@@ -329,12 +236,7 @@ fn squeezed_layout_drag(cx: &mut gpui::TestAppContext) {
             block("pendientes", 200.0), block("vistas", 46.0)
         ]}
     ]});
-    let (view, cx) = open_window(
-        cx,
-        "drag-probe",
-        "export default () => null;",
-        layout.clone(),
-    );
+    let (view, cx) = open_window(cx, "drag-probe", "export default () => null;", layout.clone());
     for height in [800.0, 380.0, 344.0, 300.0] {
         cx.simulate_resize(size(px(900.0), px(height)));
         cx.update(|window, cx| window.draw(cx).clear(cx));
@@ -347,32 +249,18 @@ fn squeezed_layout_drag(cx: &mut gpui::TestAppContext) {
                         let a = &parent.children()[index];
                         let b = &parent.children()[index + 1];
                         let bounds = this.bounds.borrow();
-                        let total =
-                            f32::from(bounds[&a.id].size.height + bounds[&b.id].size.height)
-                                / super::settings::zoom();
+                        let total = f32::from(bounds[&a.id].size.height + bounds[&b.id].size.height) / super::settings::zoom();
                         drop(bounds);
                         let before = serde_json::to_value(parent).unwrap();
-                        this.drag = Some(super::Drag {
-                            container: container.into(),
-                            index,
-                            axis: super::Axis::Column,
-                        });
+                        this.drag = Some(super::Drag { container: container.into(), index, axis: super::Axis::Column });
                         this.drag_to(point(px(100.0), px(y)));
                         let after = this.chrome.find(container).unwrap();
                         if container == "sidebar" || total <= 48.0 {
-                            assert_eq!(
-                                serde_json::to_value(after).unwrap(),
-                                before,
-                                "{container}[{index}], height {height}"
-                            );
+                            assert_eq!(serde_json::to_value(after).unwrap(), before, "{container}[{index}], height {height}");
                         } else {
                             for child in &after.children()[index..=index + 1] {
                                 if let Some(super::Span::Px { px }) = child.size {
-                                    assert!(
-                                        px >= 0.0 && px <= total,
-                                        "{}: {px} out of {total}",
-                                        child.id
-                                    );
+                                    assert!(px >= 0.0 && px <= total, "{}: {px} out of {total}", child.id);
                                 }
                             }
                         }

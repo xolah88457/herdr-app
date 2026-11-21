@@ -18,6 +18,7 @@ const APPEARANCES = [
 const PANELS = [
   { id: "files", icon: "files", title: "Files", about: "The folder you're in as a tree. Open a file to read it, highlighted." },
   { id: "changes", icon: "git-compare", title: "Changes", about: "What your agents changed: every file with its diff, and a commit box." },
+  { id: "taskboard", icon: "circle-check", title: "Tasks", about: "Your tsk tasks for the folder you're in, grouped by status." },
 ];
 
 // The key bound to a command, as people press it: "Ctrl+Shift+P".
@@ -108,18 +109,29 @@ export default class Welcome extends View {
   }
 
   // The panels picked: the tab bar shows a button for each.
+  // Tasks is its own opt-out, `workspace.tasks` (on unless false), so lists saved before it existed keep it.
   panels() {
-    return shared("workspace.panels") ?? PANELS.map((p) => p.id);
+    const files = (shared("workspace.panels") ?? PANELS.map((p) => p.id)).filter((x) => x !== "taskboard");
+    return shared("workspace.tasks") === false ? files : [...files, "taskboard"];
+  }
+
+  // Tasks is offered only when the active layout has a taskboard block (the rule the tab bar uses).
+  offered() {
+    const hasTasks = find(layout(), "panel-body")?.children?.some((c) => c.id === "taskboard");
+    return PANELS.filter((p) => p.id !== "taskboard" || hasTasks);
   }
 
   togglePanel(id) {
     const on = this.panels().includes(id);
     const next = on ? this.panels().filter((x) => x !== id) : [...this.panels(), id];
-    setShared("workspace.panels", next);
+    const offered = this.offered().map((p) => p.id);
+    const none = !next.some((x) => offered.includes(x));
+    if (id === "taskboard") setShared("workspace.tasks", !on);
+    else setShared("workspace.panels", next.filter((x) => x !== "taskboard"));
     const L = layout();
     if (!find(L, "panel")) return;
     if (on) {
-      if (find(L, "panel-body")?.active === id || next.length === 0) run("layout.hide", { id: "panel" });
+      if (find(L, "panel-body")?.active === id || none) run("layout.hide", { id: "panel" });
     } else {
       run("layout.select", { stack: "panel-body", child: id });
       run("layout.show", { id: "panel" });
@@ -400,7 +412,7 @@ export default class Welcome extends View {
     return v_flex()
       .gap(14)
       .child(this.title(t, "Choose your panels", "Herdr comes with a couple of panels. Turn one on and it appears beside your terminals. Drag this window aside to see it. Later, the buttons in the tab bar open and close them."))
-      .children(PANELS.map((p) => this.panelCard(t, p)))
+      .children(this.offered().map((p) => this.panelCard(t, p)))
       .child(
         h_flex()
           .gap(10)

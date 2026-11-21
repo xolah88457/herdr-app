@@ -10,13 +10,17 @@ const KNOWN = "new-menu.agents";
 const ENTWURF_PI = ["sh", "-c", `
 for tool in tmux entwurf pi; do
   if ! command -v "$tool" >/dev/null 2>&1; then
-    printf 'Entwurf Pi needs %s on PATH. Nothing was installed.\\n' "$tool" >&2
+    printf 'Entwurf Pi needs %s on PATH. Nothing was installed.\\nPress Enter to close.\\n' "$tool" >&2
+    read -r _
     exit 127
   fi
 done
 unset TMUX TMUX_PANE HERDR_ENV HERDR_BIN_PATH HERDR_PANE_ID HERDR_SOCKET_PATH
+# This server is private to the launch: destroy-unattached ends its only session
+# (and Pi with it) when the client detaches or dies, instead of leaving it on an unreachable socket.
 exec tmux -L "herdr-entwurf-$$-$(date +%s)" new-session \\
-  sh -c 'entwurf pi || { printf "\\nPi launch failed. Check Entwurf Pi setup, then press Enter to close tmux.\\n" >&2; read -r reply; exit 1; }'
+  sh -c 'entwurf pi || { printf "\\nPi launch failed. Check Entwurf Pi setup, then press Enter to close tmux.\\n" >&2; read -r reply; exit 1; }' \\; \\
+  set-option destroy-unattached on
 `];
 
 function shortcut(name) {
@@ -65,10 +69,12 @@ export default class NewMenu extends View {
     const installed = this.agents.filter(a => a.installed);
     const choices = this.failed ? installed : [...installed, ...this.agents.filter(a => !a.installed).slice(0, 2)];
     const platform = window()?.platform;
-    const entwurf = space && !space.machine && (platform === "macos" || platform === "linux");
-    const folder = entwurf ? panes().find(p => p.focused)?.cwd : undefined;
+    const localUnix = space && !space.machine && (platform === "macos" || platform === "linux");
+    const folder = localUnix ? panes().find(p => p.focused)?.cwd : undefined;
     const useTmux = shared("pi-subagents.tmux") === true;
-    const rows = Math.max(1, choices.length + (this.failed ? 1 : 0)) + (entwurf ? 3 : 0);
+    // hidden: workers run without a tab or pane, under their parent in the Agents list.
+    const layout = shared("pi-subagents.windows") === false ? "hidden" : shared("pi-subagents.split") === true ? "split" : "tab";
+    const rows = Math.max(1, choices.length + (this.failed ? 1 : 0)) + (localUnix ? 3 : 0);
     return v_flex().min_h(0).w_full().h(Math.min(491, 167 + rows * 31)).bg(t.popover).p(5).text_size(12.8)
       .id("new-menu").track_focus(this.handle)
       .on_key_down((e) => {
@@ -79,10 +85,10 @@ export default class NewMenu extends View {
         run("tab.new", { space: space?.id, argv: agent.run });
       })
       .child(this.row("terminal", svg("icons/shell.svg").size(14), "Terminal", () => run("tab.new", { space: space?.id }), shortcut("tab.new")))
-      .when(entwurf, el => el
+      .when(localUnix, el => el
         .child(this.row("pi-subagents", svg("icons/pi.svg").size(14), "Pi subagents", () => run("tab.new", {
-          space: space.id, folder, argv: ["sh", "-c", 'if [ ! -x "$1/orchestrator" ]; then printf "Prepare the Pi extension copy at %s with integrations/pi-native-panes/prepare-copy first.\\n" "$1" >&2; exit 1; fi; exec "$1/orchestrator" "$2"', "pi-subagents", `${appHome()}/pi-subagents`, useTmux ? "tmux" : "native"],
-        }), useTmux ? "tmux" : "Herdr panes"))
+          space: space.id, folder, argv: ["sh", "-c", 'if [ ! -x "$1/orchestrator" ]; then printf "Prepare the Pi extension copy at %s with integrations/pi-native-panes/prepare-copy first.\\nPress Enter to close.\\n" "$1" >&2; read -r _; exit 1; fi; HERDR_PI_WORKER_LAYOUT="$3" exec "$1/orchestrator" "$2"', "pi-subagents", `${appHome()}/pi-subagents`, useTmux ? "tmux" : "native", layout],
+        }), folder ? (useTmux ? "tmux" : layout === "split" ? "Herdr splits" : "Herdr tabs") : "no terminal folder", Boolean(folder)))
         .child(this.row("entwurf-pi", svg("icons/tmux.svg").size(14), "Entwurf Pi in tmux", () => run("tab.new", { space: space.id, argv: ENTWURF_PI })))
         .child(this.row("entwurf-setup", svg("icons/pi.svg").size(14), "Set up Entwurf for Pi…", () => openOverlay({
           mod: "confirm", kind: "dialog", modal: true, width: 480, height: 220, props: {

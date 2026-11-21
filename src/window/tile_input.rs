@@ -1,10 +1,11 @@
 //! Window-only workspace placement. Shipped chrome rows and the popup's
 //! Tile row carry a typed native drag payload into the workspace drop surface.
 use super::*;
+use super::workspace_tiles::{Slot, TileKind};
 
 #[derive(Clone)]
 struct TileSource {
-    kind: &'static str,
+    kind: TileKind,
     id: String,
     window: Option<gpui::WindowId>,
 }
@@ -14,31 +15,36 @@ impl TileSource {
         if inst.name != "menu" { return None; }
         let target = &inst.props["target"];
         let (kind, id) = match inst.props["tab"].as_str()? {
-            "space" => ("space", &model.space(target["id"].as_str()?)?.id),
-            "tab" => ("tab", &model.tab(target["id"].as_str()?)?.id),
+            "space" => (TileKind::Space, &model.space(target["id"].as_str()?)?.id),
+            "tab" => (TileKind::Tab, &model.tab(target["id"].as_str()?)?.id),
             "pane" => {
                 let id = target["pane"].as_str()?;
                 let node = model.tab_of(id)?.root.find(id).filter(|n| n.is_pane())?;
-                ("pane", &node.id)
+                (TileKind::Pane, &node.id)
             }
             _ => return None,
         };
         Some(Self { kind, id: id.clone(), window: None })
+    }
+
+    /// Drags from a row belong to one window; menu sources fit any.
+    fn accepts(&self, window: &Window) -> bool {
+        self.window.is_none_or(|id| id == window.window_handle().window_id())
     }
 }
 
 impl Render for TileSource {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         div().px_2().py_1().rounded_md().bg(c("popover")).text_color(c("foreground"))
-            .text_xs().child(format!("Tile {}", self.kind))
+            .text_xs().child(format!("Tile {}", self.kind.label()))
     }
 }
 
 // The menu and the drop surface share this map; the center deliberately does nothing.
-const POSITIONS: [[Option<(&str, &str)>; 3]; 3] = [
-    [Some(("top-left", "Top left")), Some(("top", "Top")), Some(("top-right", "Top right"))],
-    [Some(("left", "Left")), None, Some(("right", "Right"))],
-    [Some(("bottom-left", "Bottom left")), Some(("bottom", "Bottom")), Some(("bottom-right", "Bottom right"))],
+pub(super) const POSITIONS: [[Option<(&str, Slot, &str)>; 3]; 3] = [
+    [Some(("top-left", Slot::TOP_LEFT, "Top left")), Some(("top", Slot::TOP, "Top")), Some(("top-right", Slot::TOP_RIGHT, "Top right"))],
+    [Some(("left", Slot::LEFT, "Left")), None, Some(("right", Slot::RIGHT, "Right"))],
+    [Some(("bottom-left", Slot::BOTTOM_LEFT, "Bottom left")), Some(("bottom", Slot::BOTTOM, "Bottom")), Some(("bottom-right", Slot::BOTTOM_RIGHT, "Bottom right"))],
 ];
 
 fn button(id: &'static str) -> Stateful<Div> {
@@ -49,8 +55,8 @@ fn button(id: &'static str) -> Stateful<Div> {
 
 pub(super) fn decorate_workspace_rows(root: &ShellRoot, name: &str, window: &Window, cx: &mut App) {
     let (kind, prefix, release_id) = match name {
-        "spaces" => ("space", "workspace-space-row-", "spaces-release"),
-        "tabs" => ("tab", "workspace-tab-row-", "tabs-release"),
+        "spaces" => (TileKind::Space, "workspace-space-row-", "spaces-release"),
+        "tabs" => (TileKind::Tab, "workspace-tab-row-", "tabs-release"),
         _ => return,
     };
     let window_id = window.window_handle().window_id();
@@ -74,7 +80,7 @@ impl AppWindow {
             let drag_menu = o.id.clone();
             let view = cx.entity().downgrade();
             let handle = button("workspace-tile-source").flex_none().justify_between().px(settings::z(10.))
-                .cursor(CursorStyle::OpenHand).child(format!("Tile {}…", source.kind))
+                .cursor(CursorStyle::OpenHand).child(format!("Tile {}…", source.kind.label()))
                 .child(div().text_color(c("dim")).text_size(settings::z(11.)).child("or drag"))
                 .on_drag(source, move |source, _, window, cx| {
                     // The popup must not cover the destination after the drag starts.
@@ -91,17 +97,17 @@ impl AppWindow {
             panel = panel.child(handle).child(div().flex_none().w_full().child(content));
         } else {
             panel = panel.p(settings::z(4.)).child(div().pl(settings::z(6.)).text_color(c("muted"))
-                .child(format!("Place {}", source.kind)));
+                .child(format!("Place {}", source.kind.label())));
             for row in POSITIONS {
                 let mut buttons = div().flex_none().flex().w_full();
                 for position in row {
-                    if let Some((placement, label)) = position {
+                    if let Some((id, slot, label)) = position {
                         let source = source.clone();
                         let menu = o.id.clone();
-                        buttons = buttons.child(button(placement).flex_1().text_size(settings::z(10.5)).child(label)
+                        buttons = buttons.child(button(id).flex_1().text_size(settings::z(10.5)).child(label)
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.close_overlay(&menu, window, cx);
-                                this.apply_tile(&source, placement, window, cx);
+                                this.apply_tile(&source, slot, window, cx);
                             })));
                     } else {
                         buttons = buttons.child(div().flex_1());
@@ -122,9 +128,9 @@ impl AppWindow {
         panel.into_any_element()
     }
 
-    fn apply_tile(&mut self, source: &TileSource, placement: &str, window: &mut Window, cx: &mut Context<Self>) {
-        if source.window.is_some_and(|id| id != window.window_handle().window_id()) { return; }
-        if self.place_workspace_tile(source.kind, &source.id, placement) {
+    fn apply_tile(&mut self, source: &TileSource, slot: Slot, window: &mut Window, cx: &mut Context<Self>) {
+        if !source.accepts(window) { return; }
+        if self.place_workspace_tile(source.kind, &source.id, slot) {
             self.sync(window, cx);
         }
     }
@@ -138,18 +144,18 @@ impl AppWindow {
         let bands = [(0., 0.25), (0.25, 0.5), (0.75, 0.25)];
         for (y, row) in POSITIONS.iter().enumerate() {
             for (x, position) in row.iter().enumerate() {
-                let Some((placement, _)) = *position else { continue };
+                let Some((_, slot, _)) = *position else { continue };
                 let hover = hovered.clone();
                 body = body.child(div().absolute().left(relative(bands[x].0)).w(relative(bands[x].1))
                     .top(relative(bands[y].0)).h(relative(bands[y].1))
                     .drag_over::<TileSource>(move |s, source, window, _| {
-                        if source.window.is_none_or(|id| id == window.window_handle().window_id()) {
-                            hover.set(workspace_tiles::Slot::parse(placement));
+                        if source.accepts(window) {
+                            hover.set(Some(slot));
                         }
                         s
                     })
                     .on_drop(cx.listener(move |this, source: &TileSource, window, cx| {
-                        this.apply_tile(source, placement, window, cx);
+                        this.apply_tile(source, slot, window, cx);
                     })));
             }
         }
@@ -181,7 +187,7 @@ mod tests {
             ("pane", "pb", json!({"pane": "pb", "terminal": "/tmp/file"})),
         ] {
             let clicked = source("menu", kind, target.clone()).unwrap();
-            assert_eq!((clicked.kind, clicked.id.as_str()), (kind, id));
+            assert_eq!((clicked.kind.label(), clicked.id.as_str()), (kind, id));
             assert!(source("personal-menu", kind, target).is_none());
         }
         assert!(source("menu", "pane", json!({"pane": "/tmp/file"})).is_none());

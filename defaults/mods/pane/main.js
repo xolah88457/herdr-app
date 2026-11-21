@@ -61,7 +61,7 @@ export default class Pane extends View {
     const p = this.me();
     if (!p) return div();
     const name = p.name || ((p.program?.agent || p.program?.shell) && p.program.name) || p.title || p.program?.name || "shell";
-    const space = props()?.workspaceTiled && spaces().find(s => s.tabs.some(tab => tab.id === p.tab));
+    const space = p.tiled && spaces().find(s => s.tabs.some(tab => tab.id === p.tab));
     const path = folder(p.cwd);
     const pic = icon(p.program, 14, t.dim);
     const st = p.status;
