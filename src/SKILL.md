@@ -137,8 +137,9 @@ the screen.
 
 First read `~/.config/herdr-app/AGENTS.md` (or `$HERDR_APP_HOME/AGENTS.md` if
 set). It is the installed guide to settings, layouts, commands and mods.
-Read the generated `.d.ts` files beside it for full API details; do not edit
-those files or the generated guide. The app rewrites them on start.
+Read the `.d.ts` files beside it (`gpui-kit.d.ts` is generated, `herdr.d.ts`
+ships with the app) for full API details; do not edit those files or the
+guide. The app rewrites them on start.
 
 - `terminal_theme` in settings.json (Settings > Look) picks terminal colors:
   `follow` (default) uses the app theme; or a preset or `themes/<name>.json`

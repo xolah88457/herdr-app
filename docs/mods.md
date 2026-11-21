@@ -9,7 +9,7 @@ For live folder updates, `watchFolder(path)` returns an awaitable promise with
 `cancel()`. Keep the promise and cancel it when the folder is no longer shown;
 it resolves with `[]` and releases that call without stopping other mods' watches.
 
-The generated `herdr.d.ts` and `gpui-kit.d.ts` beside your installed guide describe the full API for your version.
+The `herdr.d.ts` (shipped with the app) and generated `gpui-kit.d.ts` beside your installed guide describe the full API for your version.
 
 Start with Settings for fonts, colors and sounds.
 For deeper changes, duplicate a shipped layout or mod from the command palette, then edit the copy.

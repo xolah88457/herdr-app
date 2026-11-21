@@ -86,6 +86,7 @@ export default class Taskboard extends View {
           : `Cannot load tasks: ${detail.slice(0, 220)}`;
         state.rows = [];
         state.folder = undefined;
+        state.at = Date.now();
       } finally {
         state.loading = false;
         if (this.current(state)) cx.notify();

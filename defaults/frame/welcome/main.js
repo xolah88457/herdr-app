@@ -124,12 +124,14 @@ export default class Welcome extends View {
   togglePanel(id) {
     const on = this.panels().includes(id);
     const next = on ? this.panels().filter((x) => x !== id) : [...this.panels(), id];
+    const offered = this.offered().map((p) => p.id);
+    const none = !next.some((x) => offered.includes(x));
     if (id === "taskboard") setShared("workspace.tasks", !on);
     else setShared("workspace.panels", next.filter((x) => x !== "taskboard"));
     const L = layout();
     if (!find(L, "panel")) return;
     if (on) {
-      if (find(L, "panel-body")?.active === id || next.length === 0) run("layout.hide", { id: "panel" });
+      if (find(L, "panel-body")?.active === id || none) run("layout.hide", { id: "panel" });
     } else {
       run("layout.select", { stack: "panel-body", child: id });
       run("layout.show", { id: "panel" });

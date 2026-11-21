@@ -286,6 +286,27 @@ test("both task lists load concurrently", async () => {
   await h.pending[0];
 });
 
+test("an errored board reloads when shown again after the throttle, not before", async () => {
+  let calls = 0;
+  const h = harness(async () => { calls++; throw new Error("boom"); });
+  const realNow = Date.now;
+  try {
+    let now = 1_000_000;
+    Date.now = () => now;
+    h.render();
+    await h.pending[0];
+    expect(calls).toBe(2);
+    h.render();
+    expect(h.pending).toHaveLength(1); // errored just now: throttled
+    now += 11_000;
+    h.render();
+    expect(h.pending).toHaveLength(2); // stale error: reload
+    expect(calls).toBe(4);
+  } finally {
+    Date.now = realNow;
+  }
+});
+
 test("looking at a stale board again reloads it; a fresh, loading or hidden one does not", async () => {
   let calls = 0;
   const h = harness(async () => { calls++; return ok("[]"); });

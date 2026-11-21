@@ -44,7 +44,8 @@ elements, a native GPU UI (`div()`, flex, children,
 https://gpui-kit.com. The Herdr app carries its own copy with additions
 (`frames`, `loop`), so **the type files here are the truth**:
 `gpui-kit.d.ts` for elements and `herdr.d.ts` for the app's data and
-commands. They're rewritten on every start to match this version.
+commands. `gpui-kit.d.ts` is generated and `herdr.d.ts` is hand-written and
+ships with the app; both are rewritten on every start to match this version.
 
 ## Changing things safely
 
@@ -120,8 +121,9 @@ the highlighted line shows where it will land.
   split right and down. One nobody named is called by its place (1, 2,
   ...) in the model. The `tabs` mod instead shows the first agent's live task
   title or the program, with folder and feature branch when informative.
-  `tab.rename` names it ("fix login"); explicit names win even if they match a
-  program name. Clear a name to resume automatic labels. A space
+  `tab.rename` names it ("fix login"); explicit names win, except a name equal
+  (case-insensitive) to the lead program's name, which older versions saved and
+  which keeps following the agent title. Clear a name to resume automatic labels. A space
   has one or more; closing the last one closes the space (it stays in
   `recent`).
 - A tab can be **settled** (`tab.settle`): put away on this screen, still running;
@@ -855,7 +857,9 @@ What's about the user, never a look:
   Otherwise a preset name or any `themes/<name>.json` (shipped:
   `atom-one-dark`, `atom-one-light`, `win98`). An unknown value falls back to
   `follow` and is reported as a problem. With a non-`follow` theme, settings.json
-  `colors` and a layout's `colors` still override terminal colors. Applies to
+  `colors` and a layout's `colors` still override terminal colors, in the order
+  theme file < settings.json colors < layout colors; chrome keys such as
+  `background` and `ansiN` set there also recolor terminals. Applies to
   existing and new terminals without restarting programs; a program can still
   request its own colors.
 - `minimum_contrast`: terminal text contrast ratio, `1` (default) leaves
@@ -1148,11 +1152,11 @@ language, value, readonly, font_family: settings().font_family, syntax: {
 keyword: theme().ansi5, ... } })` + `Editor.new(state)` is a code view (readonly)
 or editor with syntax highlighting, line numbers and folding. A viewer opens
 beside the shell as a pane: `pane.split {direction, mod, props: { file }}`.
-The full surface is in `gpui-kit.d.ts` next to this file.
+The full surface is in `gpui-kit.d.ts` next to this file (generated).
 
 ### The `herdr` module
 
-All of it is in `herdr.d.ts`. In short:
+All of it is in `herdr.d.ts` (hand-written, shipped with the app). In short:
 
 - Live data: `spaces()` (each with its tabs, status, name, named, folder,
   machine, branch), `machines()` (name, null for this computer; layout:
