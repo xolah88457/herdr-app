@@ -69,7 +69,9 @@ export function getShellReadyDelayMs(): number {
 }
 
 export function isMuxAvailable(): boolean {
-  try { binding(); return true; } catch { return false; }
+  // Cheap: only the environment binding() requires up front; launchSurface does the full lookup.
+  const { HC_TERMINAL_ID: parent, HERDR_APP_HOME: home, TMUX, TMUX_PANE } = process.env;
+  return !TMUX && !TMUX_PANE && isTerminal(parent) && Boolean(home) && isAbsolute(home!);
 }
 
 /** HERDR_PI_WORKER_LAYOUT=split opens workers beside the parent; anything else (the default) is a background tab. */

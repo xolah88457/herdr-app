@@ -180,6 +180,7 @@ def watch_client(argv, tmux, env):
             stop = signum
 
     pending = b""  # Unsent tail of a partly written sequence; always finish it before anything else.
+    total = 0  # Length of the sequence `pending` is the tail of; a shorter tail means it was started.
 
     def flush(deadline=None):
         """Write what is pending; with a deadline, wait for the tty to drain."""
@@ -195,13 +196,30 @@ def watch_client(argv, tmux, env):
                     return False
         return True
 
-    def emit(status, final=False):
+    def settle():
+        """Last chance before exit: never leave the outer terminal inside an OSC."""
         nonlocal pending
+        if flush(time.monotonic() + 0.1) or len(pending) >= total:
+            pending = b""  # Done, or nothing of it was written: no sequence is open.
+            return
+        pending = b""
+        try:
+            if select.select([], [status_fd], [], 0.1)[1]:
+                os.write(status_fd, b"\x1b\\")  # A lone string terminator closes it.
+        except OSError:
+            pass
+
+    def emit(status, final=False):
+        nonlocal pending, total
         deadline = time.monotonic() + 0.25 if final else None
         if not flush(deadline):
+            if final:
+                settle()
             return False  # Retry the changed status on the next poll.
         pending = report(status)
-        flush(deadline)  # A partial write leaves the rest pending, completed by the next call.
+        total = len(pending)
+        if not flush(deadline) and final:  # A partial write leaves the rest pending, completed by the next call.
+            settle()
         return True
 
     handlers = {}
