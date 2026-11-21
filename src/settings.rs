@@ -674,15 +674,19 @@ pub fn rgb(s: &str) -> Rgb {
 impl Settings {
     /// Problems an agent should hear about before the file is applied.
     pub fn problems(&self) -> Vec<String> {
+        self.problems_in(&themes_dir())
+    }
+
+    fn problems_in(&self, dir: &Path) -> Vec<String> {
         let mut out = Vec::new();
         for name in [&self.theme_light, &self.theme_dark] {
-            if let Err(e) = palette(name) {
+            if let Err(e) = palette_in(name, dir) {
                 out.push(e);
             }
         }
         out.dedup();
         if self.terminal_theme != FOLLOW_THEME
-            && let Err(e) = palette(&self.terminal_theme)
+            && let Err(e) = palette_in(&self.terminal_theme, dir)
         {
             out.push(format!("terminal_theme: {e}"));
         }
@@ -817,13 +821,11 @@ fn set_from(s: Settings, dir: &Path) -> bool {
         let theme = resolve(&p, &colors);
         // A terminal theme that is not "follow" (or cannot be read: problems()
         // reports it) keeps the user's and the layout's color overrides.
-        let terminal_colors = (s.terminal_theme != FOLLOW_THEME)
-            .then(|| palette_in(&s.terminal_theme, dir).ok())
-            .flatten()
-            .map(|(p, mut colors)| {
-                colors.extend(s.colors.clone());
-                resolve(&p, &colors)
-            });
+        let terminal_palette = if s.terminal_theme != FOLLOW_THEME { palette_in(&s.terminal_theme, dir).ok() } else { None };
+        let terminal_colors = terminal_palette.map(|(p, mut colors)| {
+            colors.extend(s.colors.clone());
+            resolve(&p, &colors)
+        });
         let terminal = vt::Theme::from_colors(terminal_colors.as_ref().unwrap_or(&theme), s.minimum_contrast);
         let current = c.borrow();
         if *current.0 == s && *current.1 == theme && current.2 == terminal {
@@ -1040,7 +1042,7 @@ mod tests {
         assert_eq!(theme(), chrome);
 
         settings.terminal_theme = "missing".into();
-        assert!(settings.problems().iter().any(|p| p.starts_with("terminal_theme:")));
+        assert!(settings.problems_in(&dir).iter().any(|p| p.starts_with("terminal_theme:")));
         assert!(set_from(settings.clone(), &dir));
         assert_eq!(terminal_theme().bg, rgb(&chrome["background"]), "an unknown theme follows the app");
 
@@ -1226,7 +1228,7 @@ mod tests {
     /// settings.json key.
     #[test]
     fn the_guide_explains_every_setting() {
-        let all = Person { core: Some(String::new()), font: Some(String::new()), font_size: Some(1.0), font_weight: Some(400), ui_font: Some(String::new()), telemetry: false, clipboard_write: false, copy_on_select: false, appearance: Appearance::Light, theme: Some(crate::layout::ThemeChoice::One(String::new())), colors: [("text".into(), String::new())].into(), ..Person::default() };
+        let all = Person { core: Some(String::new()), font: Some(String::new()), font_size: Some(1.0), font_weight: Some(400), ui_font: Some(String::new()), telemetry: false, clipboard_write: false, copy_on_select: false, terminal_theme: "custom".into(), appearance: Appearance::Light, theme: Some(crate::layout::ThemeChoice::One(String::new())), colors: [("text".into(), String::new())].into(), ..Person::default() };
         let keys: Vec<String> = serde_json::to_value(&all).unwrap().as_object().unwrap().keys().cloned().collect();
         let guide = include_str!("../defaults/AGENTS.md");
         let section = guide.split("## The person").nth(1).and_then(|s| s.split("\n## ").next()).unwrap_or_default();

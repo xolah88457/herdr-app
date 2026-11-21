@@ -3876,7 +3876,12 @@ impl AppWindow {
     fn mod_block_shown(&self, id: &str) -> bool {
         self.copies.contains_key(id)
             && (self.chrome.visible_blocks().iter().any(|n| n.id == id && matches!(n.content(), Some(Content::Mod { .. })))
-                || (self.shows_tab() && self.workspace_roots().flat_map(Node::visible_blocks).any(|n| n.id == id)))
+                || if self.workspace_tiling_active() {
+                    // Tiles are drawn only inside a Context block.
+                    self.shows_tab() && self.workspace_roots().flat_map(Node::visible_blocks).any(|n| n.id == id)
+                } else {
+                    self.model.active_tab().is_some_and(|t| t.shown().visible_blocks().iter().any(|n| n.id == id))
+                })
     }
 
     /// Its mod.json says `"focusable": true` (`go` asks only of visible blocks).
@@ -4722,6 +4727,26 @@ impl AppWindow {
         }
     }
 
+    /// A click on a mod pane focuses it. Tiled, its terminal neighbors stay
+    /// mounted: release their keyboard before the clicked mod handles the press.
+    fn focus_clicked_mod_pane(&mut self, id: &str, tiled: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if self.focused_pane.as_deref() == Some(id) {
+            return;
+        }
+        if tiled && self.terms.values().any(|t| t.view.read(cx).owns_keyboard_focus(window, cx)) {
+            self.focus.focus(window, cx);
+        }
+        self.model.focus_pane(id);
+        self.focused_pane = Some(id.to_owned());
+        if tiled {
+            self.focused_block = None;
+            self.synced_model_pane = self.model.focused_pane();
+        }
+        self.publish(cx);
+        self.save();
+        cx.notify();
+    }
+
     fn render_slot(&self, slot: &str, cx: &mut Context<Self>) -> AnyElement {
         let in_overlay = slot.starts_with("overlay:") || self.overlays.iter().any(|o| o.layout.as_ref().is_some_and(|l| l.find(slot).is_some()));
         // A mod that is a pane in a tab: a click makes it the focused pane, and the
@@ -4733,33 +4758,9 @@ impl AppWindow {
                 .key_context(key_context("Mod", "mod", &inst.name))
                 .when(in_pane, |d| {
                     let id = slot.to_owned();
-                    if !self.workspace_tiling_active() {
-                        return d.on_any_mouse_down(cx.listener(move |this, _, _, cx| {
-                            if this.focused_pane.as_deref() != Some(id.as_str()) {
-                                this.model.focus_pane(&id);
-                                this.focused_pane = Some(id.clone());
-                                this.publish(cx);
-                                this.save();
-                                cx.notify();
-                            }
-                        }));
-                    }
-                    d.capture_any_mouse_down(cx.listener(move |this, _, window, cx| {
-                        if this.focused_pane.as_deref() != Some(id.as_str()) {
-                            // A tiled terminal remains mounted beside the mod. Release
-                            // its keyboard before the clicked mod handles the press.
-                            if this.terms.values().any(|t| t.view.read(cx).owns_keyboard_focus(window, cx)) {
-                                this.focus.focus(window, cx);
-                            }
-                            this.model.focus_pane(&id);
-                            this.focused_block = None;
-                            this.focused_pane = Some(id.clone());
-                            this.synced_model_pane = this.model.focused_pane();
-                            this.publish(cx);
-                            this.save();
-                            cx.notify();
-                        }
-                    }))
+                    let tiled = self.workspace_tiling_active();
+                    let focus = cx.listener(move |this, _, window, cx| this.focus_clicked_mod_pane(&id, tiled, window, cx));
+                    if tiled { d.capture_any_mouse_down(focus) } else { d.on_any_mouse_down(focus) }
                 })
                 // Bare layout clicks leave the keyboard with the pane, but an input
                 // or other focusable control owns the keyboard once it takes focus.
