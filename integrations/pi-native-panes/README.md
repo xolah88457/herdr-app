@@ -2,29 +2,32 @@
 
 This opt-in adapter targets the `pi-interactive-subagents-merged` package (`3.8.0-merged.1`). It does not modify Herdr, the installed Pi package, or the tmux integration. `prepare-copy` copies extension sources and bundled agent definitions to a new directory and patches only the copy. No install, credentials, dependency tree, or settings file is copied.
 
+## Prepare a copy
+
+From this directory, once:
+
+```sh
+./prepare-copy /path/to/pi-merged "${HERDR_APP_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/herdr-app}/pi-subagents"
+```
+
+Use a new destination: `prepare-copy` never overwrites an existing copy. It refuses a package whose `package.json` version is not `3.8.0-merged.1` (`--any-version` tries anyway; the patch may not apply) and needs the `patch` command. To refresh the launcher files of an existing copy after updating Herdr, run `./prepare-copy --update /path/to/copy`. This replaces only `orchestrator`, `pi-native`, `native.ts`, `herdr-tmux`, `herdr-status.ts` and `VARIANTS.md`; it does not re-patch the extension. To pick up a new extension version, prepare a fresh copy.
+
 ## Use the Herdr setting
 
-From this directory, run `./prepare-copy /path/to/pi-merged "${HERDR_APP_HOME:-$HOME/.config/herdr-app}/pi-subagents"` once. Use a new destination; an older standalone copy is not replaced. In local macOS/Linux spaces choose **+ > Pi subagents**. **Settings > Pi subagents > Use tmux** is off by default. When on, new sessions use the original extension inside a private tmux server and attach via Herdr's existing status bridge. Keep the original extension at its source path. Both modes load only the selected subagent extension, include [the orchestrator guide](VARIANTS.md), and explicitly load the CLIProxyAPI provider if present. Existing sessions, plain `pi`, and the Entwurf preset are unchanged.
+In local macOS/Linux spaces choose **+ > Pi subagents**. **Settings > Pi subagents > Use tmux** is off by default. When on, new sessions use the original extension inside a private tmux server and attach via Herdr's existing status bridge; closing the tab ends that tmux session and its server (Pi and its workers stop). Keep the original extension at its source path. Both modes load only the selected subagent extension and add [the orchestrator guide](VARIANTS.md) (read at launch) to Pi's system prompt. Pass extra providers or extensions yourself; the launcher adds none. Existing sessions, plain `pi`, and the Entwurf preset are unchanged.
 
 ## Standalone native launcher
 
-From this integration directory:
-
 ```sh
-./prepare-copy /path/to/pi-merged /path/to/new-copy
 # In a native local Herdr terminal, in the project where the worker should run:
-/path/to/pi-native /path/to/new-copy
+/path/to/new-copy/pi-native /path/to/new-copy
 ```
 
-`pi`, `hc`, and `herdr-app` must be on PATH. Use a saved Pi session, not `--no-session`. Keep the Herdr terminal's core environment; if using a nondefault window, set `HERDR_APP_HOME` to its absolute app home. The adapter matches `HC_TERMINAL_ID` and checks the core's space and tab labels before splitting. It refuses tmux, remote panes and ambiguous bindings instead of using the currently focused pane.
+`pi`, `hc`, and `herdr-app` must be on PATH. Use a saved Pi session, not `--no-session`. Keep the Herdr terminal's core environment; `HERDR_APP_HOME` defaults to `${XDG_CONFIG_HOME:-$HOME/.config}/herdr-app` like the app, so set it to the absolute app home for a nondefault window. The adapter matches `HC_TERMINAL_ID` and checks the core's space and tab labels before splitting. It refuses tmux, remote panes and ambiguous bindings instead of using the currently focused pane.
 
-The parent launcher disables auto-loaded extensions so the original tool cannot win a name collision. For a provider supplied by an extension, pass it explicitly, for example `pi-native /path/to/new-copy -e "$HOME/.pi/agent/npm/node_modules/@router-for-me/pi-cliproxyapi-provider/extensions/index.ts"`. Standard Pi model settings and credentials still apply. Ask Pi to use the `subagent` tool. The worker starts in a new right-hand split and reports back via the copied extension; the parent does not need to read the worker's screen. Normal `pi` still uses your normal setup. Do not install this copy globally alongside the original.
+The launcher disables auto-loaded extensions so the original tool cannot win a name collision. For a provider supplied by an extension, pass it explicitly: `pi-native /path/to/new-copy -e /path/to/provider/extensions/index.ts`. Standard Pi model settings and credentials still apply. Ask Pi to use the `subagent` tool. The worker starts in a new right-hand split and reports back via the copied extension; the parent does not need to read the worker's screen. Do not install this copy globally alongside the original.
 
-## GPT Sol: use a forked session for direct task delivery
-
-With `cliproxyapi/rp/gpt-6.2-sol`, two hosted trials in `standalone` session mode saw a worker summarize the task file instead of executing it. The Herdr pane opened correctly: the issue was how the worker interpreted the file. For Sol workers, set `session-mode: fork` in the YAML frontmatter of the **worker profile** you select. This passes the task directly and inherits the parent's conversation; choose it only when that worker should receive the parent context. This setting is independent of the Herdr/tmux preference. It is a workaround, not a change to the extension default or a fix for standalone handoff.
-
-The hosted fork-mode test used two real Sol workers and a scripted parent. The first worker received a targeted message and later resumed under the same Pi session ID. The second stayed live without receiving the first worker's input. Both returned their assigned markers and closed without closing the parent.
+If a worker summarizes its task file instead of doing the work, try `session-mode: fork` in that worker profile's frontmatter (it inherits the parent's conversation).
 
 ## Verification and scope
 

@@ -1,5 +1,5 @@
 import { execFile, execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
@@ -9,13 +9,33 @@ const isTerminal = (id: unknown): id is string => typeof id === "string" && /^t[
 const isPane = (id: unknown): id is string => typeof id === "string" && /^p[0-9a-f]+$/.test(id);
 const options = { encoding: "utf8" as const, timeout: 7000, maxBuffer: 4 * 1024 * 1024 };
 const children = new Map<string, NodeJS.ProcessEnv>();
+const scripts = new Map<string, string>();
+
+function removeScript(path: string) {
+  try { unlinkSync(path); } catch { /* already gone */ }
+}
 
 export function shellEscape(text: string): string {
   return "'" + text.replace(/'/g, "'\\''") + "'";
 }
 
+/** Turn a failed herdr-app/hc call into a message that says what went wrong. */
+function failure(bin: string, args: string[], error: any): Error {
+  if (error?.code === "ENOENT") return new Error(`${bin} not found on PATH.`);
+  // `herdr-app do` replies with JSON on stdout and exits 1 on errors.
+  let reason = "";
+  try { reason = JSON.parse(String(error?.stdout ?? "")).error ?? ""; } catch { /* not JSON */ }
+  if (typeof reason !== "string") reason = JSON.stringify(reason);
+  reason ||= String(error?.stderr ?? "").trim() || String(error?.message ?? error);
+  return new Error(`${bin} ${args.slice(0, 2).join(" ")} failed: ${reason}`);
+}
+
 function json(bin: string, args: string[], env: NodeJS.ProcessEnv) {
-  return JSON.parse(execFileSync(bin, args, { ...options, env, stdio: ["ignore", "pipe", "pipe"] }));
+  try {
+    return JSON.parse(execFileSync(bin, args, { ...options, env, stdio: ["ignore", "pipe", "pipe"] }));
+  } catch (error) {
+    throw failure(bin, args, error);
+  }
 }
 
 function binding() {
@@ -43,6 +63,11 @@ export function muxSetupHint(): string {
   return "Start Pi directly in a local Herdr app pane, with HERDR_APP_HOME set to the absolute path of that window's home and matching core environment.";
 }
 
+/** Kept for the patched extension, which no longer waits for a shell: native splits start their program directly. */
+export function getShellReadyDelayMs(): number {
+  return 0;
+}
+
 export function isMuxAvailable(): boolean {
   try { binding(); return true; } catch { return false; }
 }
@@ -52,18 +77,30 @@ export function launchSurface(command: string, scriptPath: string, cwd: string):
   const { env, home, parent, pane } = binding();
   mkdirSync(dirname(scriptPath), { recursive: true });
   writeFileSync(scriptPath, [
-    "#!/bin/bash",
+    "#!/usr/bin/env bash",
     `export HERDR_APP_HOME=${shellEscape(home)} PI_SUBAGENT_SURFACE="$HC_TERMINAL_ID"`,
     `cd -- ${shellEscape(cwd)} || exit`,
     command,
     "",
   ].join("\n"), { mode: 0o600, flag: "wx" });
-  const reply = json("herdr-app", ["do", "pane.split", JSON.stringify({
-    direction: "right", pane, argv: ["/bin/bash", scriptPath],
-  })], env);
+  let reply: any;
+  try {
+    reply = json("herdr-app", ["do", "pane.split", JSON.stringify({
+      direction: "right", pane, argv: ["/usr/bin/env", "bash", scriptPath],
+    })], env);
+  } catch (error) {
+    removeScript(scriptPath);
+    throw error;
+  }
   if (!isTerminal(reply.terminal) || reply.terminal === parent || !isPane(reply.pane) || reply.pane === pane || children.has(reply.terminal)) {
+    // The split may have happened; do not leave an untracked worker running.
+    if (isTerminal(reply.terminal) && reply.terminal !== parent && !children.has(reply.terminal)) {
+      try { json("hc", ["kill", "--json", reply.terminal], env); } catch { /* best effort */ }
+    }
+    removeScript(scriptPath);
     throw new Error("Herdr split did not return a distinct local child identity; no target was opened for input.");
   }
+  scripts.set(reply.terminal, scriptPath);
   children.set(reply.terminal, env);
   return reply.terminal;
 }
@@ -94,6 +131,9 @@ export function closeSurface(surface: string): void {
   if (record.address !== surface) throw new Error("Herdr returned a different terminal when closing a child.");
   if (record.state === "live") json("hc", ["kill", "--json", surface], env);
   children.delete(surface);
+  const script = scripts.get(surface);
+  if (script) removeScript(script);
+  scripts.delete(surface);
 }
 
 interface PollResult {

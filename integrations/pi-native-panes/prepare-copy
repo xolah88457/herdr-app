@@ -10,15 +10,41 @@ import sys
 
 HERE = Path(__file__).resolve().parent
 ENTRY = Path('pi-extension/subagents/index.ts')
+PINNED_VERSION = '3.8.0-merged.1'  # the version native.patch applies to; keep in sync with the README
 
 
-def prepare(source, dest):
+def install_launchers(dest):
+    """Copy the files that are ours, not the extension's. Safe to repeat."""
+    shutil.copy2(HERE / 'native.ts', dest / ENTRY.parent / 'native.ts')
+    for name in ['orchestrator', 'pi-native', 'VARIANTS.md']:
+        shutil.copy2(HERE / name, dest / name)
+    for name in ['herdr-tmux', 'herdr-status.ts']:
+        shutil.copy2(HERE.parent / 'pi-tmux' / name, dest / name)
+
+
+def update(dest):
+    dest = dest.resolve(strict=True)
+    if not (dest / '.herdr-native-copy').is_file():
+        raise ValueError(f'{dest} is not a prepared copy (no .herdr-native-copy)')
+    install_launchers(dest)
+    print(dest / ENTRY)
+
+
+def prepare(source, dest, any_version=False):
     source, dest = source.resolve(strict=True), dest.resolve()
     if source == dest or source in dest.parents or dest in source.parents:
         raise ValueError('source and destination must be separate, non-nested directories')
     manifest = json.loads((source / 'package.json').read_text())
     if manifest.get('pi', {}).get('extensions') != ['./' + ENTRY.as_posix()]:
         raise ValueError('expected a pi-merged package root with pi-extension/subagents/index.ts')
+    version = manifest.get('version')
+    if version != PINNED_VERSION:
+        message = f'extension version is {version}, native.patch is written for {PINNED_VERSION}'
+        if not any_version:
+            raise ValueError(message + ' (pass --any-version to try anyway)')
+        print(f'prepare-copy: warning: {message}', file=sys.stderr)
+    if shutil.which('patch') is None:
+        raise ValueError('the patch command was not found on PATH')
     patch = HERE / 'native.patch'
     dest.mkdir(mode=0o700)  # exclusive: never overwrite someone’s copy
     try:
@@ -31,12 +57,7 @@ def prepare(source, dest):
             else:
                 shutil.copy2(path, dest / name)
         subprocess.run(['patch', '-f', '-F', '0', '-p1', '-i', str(patch)], cwd=dest, check=True)
-        for adapter in sorted(HERE.glob('native*.ts')):
-            shutil.copy2(adapter, dest / ENTRY.parent / adapter.name)
-        for name in ['orchestrator', 'pi-native', 'VARIANTS.md']:
-            shutil.copy2(HERE / name, dest / name)
-        for name in ['herdr-tmux', 'herdr-status.ts']:
-            shutil.copy2(HERE.parent / 'pi-tmux' / name, dest / name)
+        install_launchers(dest)
         (dest / 'tmux-entry').write_text(str(source / ENTRY) + '\n')
         (dest / '.herdr-native-copy').write_text('Opt-in native pane transport.\n')
     except BaseException:
@@ -47,11 +68,23 @@ def prepare(source, dest):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('source', type=Path)
-    parser.add_argument('destination', type=Path, help='new directory under an existing parent')
+    parser.add_argument('source', type=Path, nargs='?', help='pi-merged package root')
+    parser.add_argument('destination', type=Path, nargs='?', help='new directory under an existing parent')
+    parser.add_argument('--update', type=Path, metavar='COPY',
+                        help='refresh only the launcher files of an existing prepared copy; no re-patching')
+    parser.add_argument('--any-version', action='store_true',
+                        help=f'try a package version other than {PINNED_VERSION}')
     args = parser.parse_args()
+    if args.update:
+        if args.source or args.destination:
+            parser.error('--update takes only the prepared copy')
+    elif not (args.source and args.destination):
+        parser.error('expected SOURCE and DESTINATION (or --update COPY)')
     os.umask(0o077)
     try:
-        prepare(args.source, args.destination)
+        if args.update:
+            update(args.update)
+        else:
+            prepare(args.source, args.destination, args.any_version)
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         sys.exit(f'prepare-copy: {exc}')

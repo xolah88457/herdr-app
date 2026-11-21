@@ -5,6 +5,8 @@ import argparse
 import base64
 import os
 import re
+import select
+import shutil
 import signal
 import subprocess
 import sys
@@ -43,7 +45,7 @@ def process_info(run, pids):
         return {}
     # A missing PID is normal and ps exits 1 if none of the PIDs exist.
     lines = run(
-        ["/bin/ps", "-p", ",".join(map(str, sorted(pids))), "-o", "pid=,stat=,tty=,lstart="],
+        [shutil.which("ps") or "/bin/ps", "-p", ",".join(map(str, sorted(pids))), "-o", "pid=,stat=,tty=,lstart="],
         ok=(0, 1),
     )
     result = {}
@@ -177,12 +179,30 @@ def watch_client(argv, tmux, env):
         if stop is None:
             stop = signum
 
-    def emit(status):
-        data = report(status)
-        try:
-            return os.write(status_fd, data) == len(data)
-        except BlockingIOError:
+    pending = b""  # Unsent tail of a partly written sequence; always finish it before anything else.
+
+    def flush(deadline=None):
+        """Write what is pending; with a deadline, wait for the tty to drain."""
+        nonlocal pending
+        while pending:
+            try:
+                pending = pending[os.write(status_fd, pending):]
+            except BlockingIOError:
+                if deadline is None:
+                    return False
+                wait = deadline - time.monotonic()
+                if wait <= 0 or not select.select([], [status_fd], [], wait)[1]:
+                    return False
+        return True
+
+    def emit(status, final=False):
+        nonlocal pending
+        deadline = time.monotonic() + 0.25 if final else None
+        if not flush(deadline):
             return False  # Retry the changed status on the next poll.
+        pending = report(status)
+        flush(deadline)  # A partial write leaves the rest pending, completed by the next call.
+        return True
 
     handlers = {}
     try:
@@ -196,7 +216,7 @@ def watch_client(argv, tmux, env):
         last = None
         while stop is None and child.poll() is None:
             if child_stopped(child):
-                emit(None)
+                emit(None, final=True)
                 last = None
                 os.kill(os.getpid(), signal.SIGSTOP)
                 child.send_signal(signal.SIGCONT)
@@ -229,7 +249,7 @@ def watch_client(argv, tmux, env):
             except (OSError, termios.error):
                 pass
             try:
-                emit(None)
+                emit(None, final=True)
             except OSError:
                 pass  # The outer PTY may already be gone.
             os.close(status_fd)

@@ -412,7 +412,7 @@ def smoke(root, args, provider):
         for socket in (tmp / f"tmux-{os.getuid()}").glob("herdr-pi-*"):
             run("tmux", "-S", str(socket), "kill-server", check=False)
         if (root / "hc.sock").is_socket():
-            hc("server", "stop")
+            hc("server", "stop", check=False)
 
 
 def main():
