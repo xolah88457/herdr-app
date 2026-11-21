@@ -26,12 +26,13 @@ const APPEARANCES = [
 // What the app uses when settings.json names no font (settings.rs).
 const DEFAULT_FONT = "JetBrains Mono";
 const DEFAULT_UI_FONT = "Geist";
+const DEFAULT_TERMINAL_THEME = "atom-one-light";
 
 export default class Settings extends View {
   init(_props, cx) {
     const asked = props()?.section;
     this.section = SECTIONS.some((s) => s.id === asked) ? asked : "look";
-    this.picking = null; // "font" | "ui_font" while its list is open
+    this.picking = null; // "font" | "ui_font" | "terminal_theme" while its list is open
     this.filter = "";
     this.fontInput = InputState.new({ placeholder: "Type to search fonts" });
     this.fontInput.on("change", (_e, cx) => { this.filter = this.fontInput.value(); cx.notify(); });
@@ -407,6 +408,73 @@ export default class Settings extends View {
       );
   }
 
+  terminalThemePicker(t) {
+    const current = this.person.terminal_theme ?? DEFAULT_TERMINAL_THEME;
+    const open = this.picking === "terminal_theme";
+    const label = (name) => name === "follow" ? "Follow Herdr" : name === DEFAULT_TERMINAL_THEME ? "Atom One Light" : name;
+    const dismiss = (_e, cx) => {
+      this.picking = null;
+      this.handle.focus();
+      cx.notify();
+    };
+    const trigger = h_flex()
+      .id("st-terminal-theme")
+      .w(220)
+      .gap(8)
+      .items_center()
+      .px(12)
+      .py(6)
+      .rounded(7)
+      .border_1()
+      .border_color(open ? t.accent : t.border)
+      .bg(t.raised)
+      .cursor_pointer()
+      .hover((s) => s.bg(t.hover))
+      .on_click((e, cx) => {
+        if (open) return dismiss(e, cx);
+        this.picking = "terminal_theme";
+        this.handle.focus();
+        cx.notify();
+      })
+      .child(div().flex_1().min_w(0).truncate().tooltip(label(current)).text_size(13.5).text_color(t.foreground).child(label(current)))
+      .child(div().text_size(12).text_color(t.muted).child(open ? "▴" : "▾"));
+    return Popup.new("st-terminal-theme-popup", trigger)
+      .when(open, (el) => {
+        const names = new Set([DEFAULT_TERMINAL_THEME, "follow", ...themes().map(({ name }) => name)]);
+        return el.content(
+          div()
+            .id("st-terminal-theme-list")
+            .w(260)
+            .max_h(220)
+            .p(4)
+            .rounded(8)
+            .border_1()
+            .border_color(t.border)
+            .bg(t.background)
+            .overflow_y_scrollbar()
+            .on_mouse_down_out(dismiss)
+            .on_scroll_wheel((_e, cx) => cx.stop_propagation())
+            .children([...names].map((name) =>
+              h_flex()
+                .id(`st-terminal-theme-option-${name}`)
+                .px(10)
+                .py(5)
+                .gap(8)
+                .items_center()
+                .rounded(6)
+                .cursor_pointer()
+                .hover((s) => s.bg(t.hover))
+                .on_click((e, cx) => {
+                  this.change((p) => { p.terminal_theme = name; }, cx);
+                  dismiss(e, cx);
+                })
+                .child(div().flex_1().min_w(0).truncate().tooltip(label(name)).text_size(13.5).text_color(t.foreground).child(label(name)))
+                .when(name === current, (el) => el.child(svg(I("check")).size(12).flex_none().text_color(t.accent))),
+            )),
+        );
+      });
+  }
+
   // The font in use, written in itself; a click opens the list.
   fontButton(t, which, family, def) {
     const open = this.picking === which;
@@ -521,6 +589,7 @@ export default class Settings extends View {
       .child(div().h(18))
       .child(this.heading(t, "Theme"))
       .child(this.row(t, "Appearance", "Light or dark, or as your system is now.", this.appearancePicker(t)))
+      .child(this.row(t, "Terminal theme", "Colors for terminals, separate from the app theme.", this.terminalThemePicker(t)))
       .child(div().pt(12).pb(8).text_size(12.5).text_color(t.dim).child("For the layout you're in: each layout keeps its own light and dark theme."))
       .child(div().pb(6).text_size(12.5).font_medium().text_color(t.muted).child("Dark"))
       .child(this.themePicker(t, false))

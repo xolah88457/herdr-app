@@ -6,10 +6,52 @@ const source = await readFile(new URL("../defaults/frame/settings/main.js", impo
 // settings.json as the mod sees it through readTextFile / writeTextFile.
 const disk: { raw: string | null; writes: number; fail?: string; readFail?: string; toasts: any[] } = { raw: null, writes: 0, toasts: [] };
 const preferences = new Map<string, unknown>();
+const namedThemes = [
+  { name: "atom-one-dark", light: false, colors: {} },
+  { name: "My personal theme", light: true, colors: {} },
+];
+const commands: unknown[][] = [];
+
+// Keep the render tree and click handlers, but ignore native styling.
+class Element {
+  nodes: (Element | string)[] = [];
+  key?: string;
+  click?: (event: unknown, cx: unknown) => void;
+  id(key: string) { this.key = key; return this; }
+  child(node: Element | string) { this.nodes.push(node); return this; }
+  children(nodes: (Element | string)[]) { this.nodes.push(...nodes); return this; }
+  content(node: Element) { return this.child(node); }
+  when(condition: boolean, build: (el: Element) => Element) { return condition ? build(this) : this; }
+  on_click(click: Element["click"]) { this.click = click; return this; }
+  find(key: string): Element | undefined {
+    if (this.key === key) return this;
+    for (const node of this.nodes) {
+      if (node instanceof Element) {
+        const found = node.find(key);
+        if (found) return found;
+      }
+    }
+  }
+  text(): string {
+    return this.nodes.map(node => node instanceof Element ? node.text() : (node ?? "")).join(" ").trim();
+  }
+}
+const element = () => new Proxy(new Element(), {
+  get: (target, prop, self) => prop in target ? Reflect.get(target, prop, self) : () => self,
+});
+
 const values: Record<string, any> = {
   shared: (key: string) => preferences.get(key),
   setShared: (key: string, value: unknown) => preferences.set(key, value),
-  v_flex: () => ({ w_full() { return this; }, child() { return this; } }),
+  div: element,
+  h_flex: element,
+  v_flex: element,
+  svg: element,
+  Popup: { new: (id: string, trigger: Element) => element().id(id).child(trigger) },
+  settings: () => ({ theme_light: "paper", theme_dark: "atom-one-dark" }),
+  themes: () => namedThemes,
+  layouts: () => [],
+  run: (...args: unknown[]) => { commands.push(args); },
   View: class {},
   appHome: () => "/home",
   notify: (n: any) => { disk.toasts.push(n); },
@@ -52,6 +94,45 @@ test("Pi subagents defaults to Herdr and the switch persists across Settings vie
     };
     view.pi({});
   }
+});
+
+test("Look offers an independent terminal theme and saves selections from the picker", async () => {
+  const original = { theme: "paper", appearance: "dark", font_size: 15 };
+  Object.assign(disk, { raw: JSON.stringify(original), writes: 0, fail: undefined, readFail: undefined, toasts: [] });
+  commands.length = 0;
+  const view = new Settings();
+  view.handle = { focus() {} };
+  view.layoutPicker = () => element();
+  await view.load();
+
+  const pending: Promise<void>[] = [];
+  const cx = { spawn: (f: (cx: unknown) => Promise<void>) => pending.push(f(cx)), notify() {} };
+  const look = (): Element => view.look({}, cx);
+  const click = (key: string) => look().find(key)!.click!(null, cx);
+  const trigger = "st-terminal-theme";
+  expect(look().text()).toContain("Terminal theme");
+  expect(look().find(trigger)!.text()).toContain("Atom One Light");
+  expect(disk.writes).toBe(0);
+
+  for (const [name, label] of [
+    ["My personal theme", "My personal theme"],
+    ["atom-one-dark", "atom-one-dark"],
+    ["follow", "Follow Herdr"],
+    ["atom-one-light", "Atom One Light"],
+  ]) {
+    click(trigger);
+    const option = `st-terminal-theme-option-${name}`;
+    expect(look().find(option)!.text()).toContain(label);
+    click(option);
+    await Promise.all(pending.splice(0));
+    expect(look().find(option)).toBeUndefined();
+    expect(look().find(trigger)!.text()).toContain(label);
+    expect(JSON.parse(disk.raw!)).toEqual({ ...original, terminal_theme: name });
+  }
+
+  expect(disk.writes).toBe(4);
+  expect(disk.toasts).toEqual([]);
+  expect(commands).toEqual([]);
 });
 
 test("a change writes settings.json, keeping what else it holds", async () => {

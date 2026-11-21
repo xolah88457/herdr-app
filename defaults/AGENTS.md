@@ -839,6 +839,7 @@ What's about the user, never a look:
   Option input on every layout. `"left"` / `"right"` makes only that Option
   key act as Alt; the other types characters. Changes apply immediately, including layout
   switches. Linux and Windows are unchanged.
+- `terminal_theme`: choose terminal colors in **Settings > Look**, independently of Herdr’s appearance. The default is `atom-one-light`; use another theme name or `follow` to use Herdr’s current theme. Applies to existing and new terminal panes without restarting their programs. A program can still request its own colors.
 - `minimum_contrast`: terminal text contrast ratio, `1` (default) leaves
   program colors unchanged. Set it to `1.6` to enable the previous readability
   adjustment, or another number from `1` to `21`. Text below that ratio is
