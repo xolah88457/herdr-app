@@ -1,12 +1,12 @@
-//! Window-only workspace placement. Shell sidebar rows reorder with JS-local
-//! mouse presses, not a GPUI drag. The shipped popup knows the exact clicked
-//! owner, so its Tile row is both a placement picker and a typed drag source.
+//! Window-only workspace placement. Shipped chrome rows and the popup's
+//! Tile row carry a typed native drag payload into the workspace drop surface.
 use super::*;
 
 #[derive(Clone)]
 struct TileSource {
     kind: &'static str,
     id: String,
+    window: Option<gpui::WindowId>,
 }
 
 impl TileSource {
@@ -23,7 +23,7 @@ impl TileSource {
             }
             _ => return None,
         };
-        Some(Self { kind, id: id.clone() })
+        Some(Self { kind, id: id.clone(), window: None })
     }
 }
 
@@ -45,6 +45,21 @@ fn button(id: &'static str) -> Stateful<Div> {
     div().id(id).tab_index(0).h(settings::z(29.)).rounded(settings::z(5.)).flex()
         .justify_center().items_center().cursor_pointer().text_color(c("foreground"))
         .hover(|s| s.bg(c("hover"))).focus(|s| s.bg(c("selected")))
+}
+
+pub(super) fn decorate_workspace_rows(root: &ShellRoot, name: &str, window: &Window, cx: &mut App) {
+    let (kind, prefix, release_id) = match name {
+        "spaces" => ("space", "workspace-space-row-", "spaces-release"),
+        "tabs" => ("tab", "workspace-tab-row-", "tabs-release"),
+        _ => return,
+    };
+    let window_id = window.window_handle().window_id();
+    root.decorate_divs(release_id, move |key, row| {
+        let Some(id) = key.strip_prefix(prefix) else { return row };
+        row.on_drag(TileSource { kind, id: id.into(), window: Some(window_id) }, |source, _, _, cx| {
+            cx.new(|_| source.clone())
+        })
+    }, cx);
 }
 
 impl AppWindow {
@@ -108,6 +123,7 @@ impl AppWindow {
     }
 
     fn apply_tile(&mut self, source: &TileSource, placement: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if source.window.is_some_and(|id| id != window.window_handle().window_id()) { return; }
         if self.place_workspace_tile(source.kind, &source.id, placement) {
             self.sync(window, cx);
         }
@@ -118,19 +134,32 @@ impl AppWindow {
         let mut body = div().relative().size_full().flex().child(content);
         // Outer quarters accept drops: one axis at an edge means a half, both
         // at edges mean a corner. Only TileSource can highlight or accept them.
+        let hovered = std::rc::Rc::new(std::cell::Cell::new(None));
         let bands = [(0., 0.25), (0.25, 0.5), (0.75, 0.25)];
         for (y, row) in POSITIONS.iter().enumerate() {
             for (x, position) in row.iter().enumerate() {
                 let Some((placement, _)) = *position else { continue };
+                let hover = hovered.clone();
                 body = body.child(div().absolute().left(relative(bands[x].0)).w(relative(bands[x].1))
                     .top(relative(bands[y].0)).h(relative(bands[y].1))
-                    .drag_over::<TileSource>(|s, _, _, _| s.bg(c("accent").opacity(0.22)).border_2().border_color(c("accent")))
+                    .drag_over::<TileSource>(move |s, source, window, _| {
+                        if source.window.is_none_or(|id| id == window.window_handle().window_id()) {
+                            hover.set(workspace_tiles::Slot::parse(placement));
+                        }
+                        s
+                    })
                     .on_drop(cx.listener(move |this, source: &TileSource, window, cx| {
                         this.apply_tile(source, placement, window, cx);
                     })));
             }
         }
-        body.into_any_element()
+        // Paint last, without a hitbox: the full preview never obscures the corner targets.
+        body.child(canvas(|_, _, _| (), move |area, _, window, _| {
+            if let Some(slot) = hovered.take() {
+                let accent = c("accent");
+                window.paint_quad(quad(slot.bounds(area), px(0.), accent.opacity(0.22), px(2.), accent, BorderStyle::Solid));
+            }
+        }).absolute().inset_0()).into_any_element()
     }
 }
 

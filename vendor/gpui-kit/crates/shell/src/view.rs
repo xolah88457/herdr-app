@@ -28,7 +28,7 @@ use gpui::{AnyElement, Context, EntityId, IntoElement, ParentElement as _, Rende
 
 use crate::{
     engine::{ShellRuntime, ViewObject},
-    materialize::materialize,
+    materialize::{DivHooks, materialize_with_div_hooks},
     policy::Policy,
     runtime::{error_banner, error_overlay},
     snapshot::RenderSnapshot,
@@ -75,6 +75,7 @@ pub struct ScriptView {
     /// script was loaded with, and no swap made in between can change that.
     policy: Rc<Policy>,
     ownership: ViewOwnership,
+    div_hooks: Option<DivHooks>,
     runtime: Rc<ShellRuntime>,
 }
 
@@ -127,8 +128,14 @@ impl ScriptView {
             theme: None,
             error: None,
             ownership,
+            div_hooks: None,
             runtime,
         }
+    }
+
+    pub(crate) fn set_div_hooks(&mut self, hooks: DivHooks, cx: &mut Context<Self>) {
+        self.div_hooks = Some(hooks);
+        cx.notify();
     }
 
     /// Marks the script description as possibly out of date.
@@ -310,8 +317,11 @@ impl Render for ScriptView {
 
 impl ScriptView {
     fn draw(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let materialize = |snapshot, window: &mut Window, cx: &mut Context<Self>| {
+            materialize_with_div_hooks(&self.runtime, snapshot, self.div_hooks.as_ref(), window, cx)
+        };
         match (self.error.as_deref(), self.current.as_ref()) {
-            (None, Some(snapshot)) => materialize(&self.runtime, snapshot, window, cx),
+            (None, Some(snapshot)) => materialize(snapshot, window, cx),
             // A build that failed left the last good snapshot in place, so the
             // interface is still there to show. Reporting over it beats
             // replacing it: the reader keeps their scroll, their focus and
@@ -319,7 +329,7 @@ impl ScriptView {
             (Some(message), Some(snapshot)) => div()
                 .relative()
                 .size_full()
-                .child(materialize(&self.runtime, snapshot, window, cx))
+                .child(materialize(snapshot, window, cx))
                 .child(error_banner(message, window, cx))
                 .into_any_element(),
             // Nothing to keep: this view has never rendered successfully.

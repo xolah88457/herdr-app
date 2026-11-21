@@ -1324,7 +1324,7 @@ impl AppWindow {
                 if let Some((name, props)) = &header
                     && n.is_pane()
                 {
-                    mods.push(pane_header_mod(n, name, props));
+                    mods.push(pane_header_mod(n, name, props, self.workspace_tiling_active()));
                 }
                 visit(n, &mut terms, &mut mods);
                 if let Some(a) = self.swapped.get(&n.id) {
@@ -1388,7 +1388,7 @@ impl AppWindow {
                 if let Some((name, props)) = &header
                     && n.is_pane()
                 {
-                    let (slot, i) = pane_header_mod(n, name, props);
+                    let (slot, i) = pane_header_mod(n, name, props, self.workspace_tiling_active());
                     out.insert(slot, i);
                 }
             }
@@ -1872,6 +1872,7 @@ impl AppWindow {
         self.mod_stamps.borrow_mut().entry(copy.inst.name.clone()).or_insert_with(|| crate::files::mod_stamp(&folder.dir));
         match runtime.try_load(&folder.dir, window, cx) {
             Ok(root) => {
+                root.update(cx, |root, cx| tile_input::decorate_workspace_rows(root, &copy.inst.name, window, cx));
                 if self.file_events.is_none() {
                     copy._watch = runtime.watch(&root, window, cx).map_err(|e| tracing::warn!("{}: no hot reload: {e:#}", copy.inst.name)).ok();
                 }
@@ -5411,10 +5412,11 @@ fn float_mod(id: &str, name: &str, props: &Value) -> (String, Instance) {
 }
 
 /// A pane header's slot and copy, told which pane it sits on (a mod pane has no terminal).
-fn pane_header_mod(n: &Node, name: &str, props: &Value) -> (String, Instance) {
+fn pane_header_mod(n: &Node, name: &str, props: &Value, tiled: bool) -> (String, Instance) {
     let mut props = if props.is_object() { props.clone() } else { json!({}) };
     props["pane"] = json!(n.id);
     props["terminal"] = json!(n.terminal());
+    if tiled && name == "pane" { props["workspaceTiled"] = json!(true); }
     (format!("{}#frame", n.id), Instance { name: name.to_owned(), props })
 }
 

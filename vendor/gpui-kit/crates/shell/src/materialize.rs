@@ -678,9 +678,26 @@ enum MotionPolicy {
 /// them today: entity-backed components (Input, Tree, Table) and tooltips need
 /// both at construction time, and they are part of this function's contract
 /// rather than an oversight.
+pub(crate) type DivDecorator = Box<dyn Fn(&str, gpui::Stateful<gpui::Div>) -> gpui::Stateful<gpui::Div>>;
+
+pub(crate) struct DivHooks {
+    pub(crate) decorate: DivDecorator,
+    pub(crate) release_id: &'static str,
+}
+
 pub fn materialize(
     runtime: &Rc<ShellRuntime>,
     snapshot: &RenderSnapshot,
+    window: &mut Window,
+    cx: &mut App,
+) -> AnyElement {
+    materialize_with_div_hooks(runtime, snapshot, None, window, cx)
+}
+
+pub(crate) fn materialize_with_div_hooks(
+    runtime: &Rc<ShellRuntime>,
+    snapshot: &RenderSnapshot,
+    hooks: Option<&DivHooks>,
     window: &mut Window,
     cx: &mut App,
 ) -> AnyElement {
@@ -690,12 +707,13 @@ pub fn materialize(
     // not enter here at all.
     let metrics = runtime.metrics();
     metrics.time_materialize(|| {
-        materialize_node(
+        materialize_decorated_node(
             runtime,
             Some(snapshot),
             snapshot.arena(),
             snapshot.root(),
             ambient,
+            hooks,
             window,
             cx,
         )
@@ -774,6 +792,20 @@ fn materialize_node(
     window: &mut Window,
     cx: &mut App,
 ) -> AnyElement {
+    materialize_decorated_node(runtime, snapshot, arena, id, inherited, None, window, cx)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn materialize_decorated_node(
+    runtime: &Rc<ShellRuntime>,
+    snapshot: Option<&RenderSnapshot>,
+    arena: &SpecArena,
+    id: SpecId,
+    inherited: gpui::Hsla,
+    hooks: Option<&DivHooks>,
+    window: &mut Window,
+    cx: &mut App,
+) -> AnyElement {
     let Some(node) = arena.node(id) else {
         return div().into_any_element();
     };
@@ -817,7 +849,7 @@ fn materialize_node(
     } else {
         node.children()
             .iter()
-            .map(|child| materialize_node(runtime, snapshot, arena, *child, inherited, window, cx))
+            .map(|child| materialize_decorated_node(runtime, snapshot, arena, *child, inherited, hooks, window, cx))
             .collect()
     };
 
@@ -837,7 +869,7 @@ fn materialize_node(
             .map(|(name, slot)| {
                 (
                     *name,
-                    materialize_node(runtime, snapshot, arena, *slot, inherited, window, cx),
+                    materialize_decorated_node(runtime, snapshot, arena, *slot, inherited, hooks, window, cx),
                 )
             })
             .collect()
@@ -889,7 +921,7 @@ fn materialize_node(
         ),
         component => materialize_component(
             runtime, snapshot, arena, node, id, component, inherited, refinement, behavior, states,
-            children, slots, slot_specs, window, cx,
+            children, slots, slot_specs, hooks, window, cx,
         ),
     }
 }
@@ -1042,6 +1074,7 @@ fn materialize_component(
     children: Children,
     slots: Slots,
     slot_specs: SlotSpecs,
+    hooks: Option<&DivHooks>,
     window: &mut Window,
     cx: &mut App,
 ) -> AnyElement {
@@ -1050,36 +1083,19 @@ fn materialize_component(
             unreachable!("registered components dispatch before the built-in component match")
         }
         Component::ChildView(child) => child.view().clone().into_any_element(),
-        Component::Div => flex_element(
+        Component::Div | Component::HFlex | Component::VFlex => flex_element(
             runtime,
-            div(),
+            match component {
+                Component::HFlex => h_flex(),
+                Component::VFlex => v_flex(),
+                _ => div(),
+            },
             id,
             refinement,
             behavior,
             states,
             children,
-            window,
-            cx,
-        ),
-        Component::HFlex => flex_element(
-            runtime,
-            h_flex(),
-            id,
-            refinement,
-            behavior,
-            states,
-            children,
-            window,
-            cx,
-        ),
-        Component::VFlex => flex_element(
-            runtime,
-            v_flex(),
-            id,
-            refinement,
-            behavior,
-            states,
-            children,
+            hooks,
             window,
             cx,
         ),
@@ -2157,9 +2173,10 @@ fn flex_element(
     element: gpui::Div,
     id: SpecId,
     refinement: StyleRefinement,
-    behavior: Behavior,
+    mut behavior: Behavior,
     states: StateStyles,
     children: Children,
+    hooks: Option<&DivHooks>,
     window: &mut Window,
     cx: &mut App,
 ) -> AnyElement {
@@ -2204,6 +2221,42 @@ fn flex_element(
     let identity = element_id(id, behavior.key.clone());
     let stateful = element.id(identity.clone());
     let stateful = with_gpui_focus(stateful, &behavior, focus.as_ref());
+    let mut stateful = stateful;
+    if let (Some(hooks), Some(key)) = (hooks, behavior.key.as_ref()) {
+        stateful = (hooks.decorate)(key.as_ref(), stateful);
+        if key.as_ref() == hooks.release_id {
+            // Defer the bound reset until row click/reorder handlers have run,
+            // even if the release was outside the strip or consumed by a drop.
+            let mut callbacks = SmallVec::<[CallbackId; 1]>::new();
+            behavior.on_mouse_up.retain(|(button, callback)| {
+                if *button != MouseButton::Left {
+                    return true;
+                }
+                callbacks.push(*callback);
+                false
+            });
+            if !callbacks.is_empty() {
+                let runtime = Rc::downgrade(runtime);
+                let bounds = Rc::new(Cell::new(None::<Bounds<Pixels>>));
+                let writer = Rc::clone(&bounds);
+                stateful = stateful.on_prepaint(move |value, _, _| writer.set(Some(value)))
+                    .capture_any_mouse_up(move |event, window, cx| {
+                        if event.button != MouseButton::Left {
+                            return;
+                        }
+                        let event = event.clone();
+                        let runtime = runtime.clone();
+                        let bounds = bounds.get();
+                        let callbacks = callbacks.clone();
+                        window.defer(cx, move |window, cx| {
+                            for callback in callbacks {
+                                dispatch_mouse_button(&runtime, callback, &event, bounds, window, cx);
+                            }
+                        });
+                    });
+            }
+        }
+    }
     let stateful = with_input_handlers(stateful, &behavior, runtime);
     let stateful = components::dock::with_commands(stateful, &behavior, runtime, cx);
     let stateful = with_aria(stateful, &behavior);

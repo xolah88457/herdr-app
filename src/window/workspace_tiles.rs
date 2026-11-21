@@ -4,10 +4,16 @@ use super::*;
 
 /// Coordinates and extents in half-workspace units.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Slot { x: u8, y: u8, w: u8, h: u8 }
+pub(super) struct Slot { x: u8, y: u8, w: u8, h: u8 }
 
 impl Slot {
-    fn parse(name: &str) -> Option<Self> {
+    pub(super) fn bounds(self, area: Bounds<Pixels>) -> Bounds<Pixels> {
+        let half = |n: u8| f32::from(n) / 2.;
+        Bounds::new(area.origin + point(area.size.width * half(self.x), area.size.height * half(self.y)),
+            size(area.size.width * half(self.w), area.size.height * half(self.h)))
+    }
+
+    pub(super) fn parse(name: &str) -> Option<Self> {
         let (x, y, w, h) = match name {
             "left" => (0, 0, 1, 2),
             "right" => (1, 0, 1, 2),
@@ -236,7 +242,7 @@ impl AppWindow {
             for (owner, slot) in &self.workspace_tiles.0 {
                 if let Some(root) = owner.root(&self.model) {
                     body = body.child(div().absolute().left(half(slot.x)).top(half(slot.y)).w(half(slot.w)).h(half(slot.h))
-                        .child(self.render_node(root, focused, frame, cx)));
+                        .overflow_hidden().child(self.render_node(root, focused, frame, cx)));
                 }
             }
             return body.into_any_element();

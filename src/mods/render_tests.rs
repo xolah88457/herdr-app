@@ -548,7 +548,7 @@ fn tabs_leave_room_for_macos_traffic_lights(cx: &mut TestAppContext) {
         let tree = describe_with_values(cx, &staged, "mods/tabs", values, None).unwrap();
         let root = tree.lines().next().unwrap();
         assert!(root.contains(&format!(".pl[Number({expected}.0)]")), "{platform}/{titlebar}/{fullscreen}/{width}/{lights}: {tree}");
-        assert!(tree.contains("tab-tab1"), "first tab must remain visible: {tree}");
+        assert!(tree.contains("workspace-tab-row-tab1"), "first tab must remain visible: {tree}");
     }
 }
 
@@ -686,6 +686,23 @@ fn confirm_dialog_background_follows_the_frame_corners(cx: &mut TestAppContext) 
     let tree = describe(cx, &staged, "mods/confirm", true, p, updates("current", "current"), None).unwrap();
     let root = tree.lines().find(|l| l.contains(":id[Str(\"confirm\")]")).unwrap();
     assert!(root.contains(".rounded[Number(8.0)]"), "the dialog background must follow the frame's corners: {root}");
+}
+
+#[gpui::test]
+fn tiled_pane_header_uses_owning_space_before_bracketed_instance(cx: &mut TestAppContext) {
+    cx.update(gpui_shell::init);
+    let staged = Staged::new();
+    for tiled in [true, false] {
+        let values = fixture(true, json!({"pane":"p2", "workspaceTiled":tiled}), updates("current", "current"));
+        let tree = describe_with_values(cx, &staged, "mods/pane", values, None).unwrap();
+        if tiled {
+            let title = tree.find("text \"Remote\"").expect("use the pane's own space, not active Local");
+            let instance = tree.find(" /remote/project]\"").expect("bracketed instance and folder");
+            assert!(title < instance && tree[title..instance].contains("text \"["), "{tree}");
+        } else {
+            assert!(tree.contains("text \"/remote/project\"") && !tree.contains("text \"Remote\""), "{tree}");
+        }
+    }
 }
 
 #[gpui::test]

@@ -300,6 +300,26 @@ impl ShellRoot {
         &self.content
     }
 
+    /// Attach native interactivity to named divs in this mounted script view.
+    /// The optional behavior on `release_id` is a bound left mouse-up callback
+    /// delivered after normal dispatch, including for releases outside the div.
+    /// This is a Rust host hook, not a script capability.
+    pub fn decorate_divs(
+        &self,
+        release_id: &'static str,
+        decorate: impl Fn(&str, gpui::Stateful<gpui::Div>) -> gpui::Stateful<gpui::Div> + 'static,
+        cx: &mut App,
+    ) {
+        if let Some(app) = self.application() {
+            app.view.update(cx, |view, cx| {
+                view.set_div_hooks(crate::materialize::DivHooks {
+                    decorate: Box::new(decorate),
+                    release_id,
+                }, cx);
+            });
+        }
+    }
+
     pub(crate) fn application(&self) -> Option<&MountedApplication> {
         self.application.as_ref()
     }
