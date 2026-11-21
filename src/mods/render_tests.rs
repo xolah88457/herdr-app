@@ -693,7 +693,9 @@ fn tiled_pane_header_uses_owning_space_before_bracketed_instance(cx: &mut TestAp
     cx.update(gpui_shell::init);
     let staged = Staged::new();
     for tiled in [true, false] {
-        let values = fixture(true, json!({"pane":"p2", "workspaceTiled":tiled}), updates("current", "current"));
+        let mut values = fixture(true, json!({"pane":"p2"}), updates("current", "current"));
+        // The pane's own `tiled` flag, not an Instance prop, so toggling never reloads headers.
+        for pane in values.get_mut("panes").unwrap().as_array_mut().unwrap() { pane["tiled"] = json!(tiled); }
         let tree = describe_with_values(cx, &staged, "mods/pane", values, None).unwrap();
         if tiled {
             let title = tree.find("text \"Remote\"").expect("use the pane's own space, not active Local");

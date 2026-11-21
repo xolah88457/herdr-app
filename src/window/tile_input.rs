@@ -25,6 +25,11 @@ impl TileSource {
         };
         Some(Self { kind, id: id.clone(), window: None })
     }
+
+    /// Drags from a row belong to one window; menu sources fit any.
+    fn accepts(&self, window: &Window) -> bool {
+        self.window.is_none_or(|id| id == window.window_handle().window_id())
+    }
 }
 
 impl Render for TileSource {
@@ -123,7 +128,7 @@ impl AppWindow {
     }
 
     fn apply_tile(&mut self, source: &TileSource, placement: &str, window: &mut Window, cx: &mut Context<Self>) {
-        if source.window.is_some_and(|id| id != window.window_handle().window_id()) { return; }
+        if !source.accepts(window) { return; }
         if self.place_workspace_tile(source.kind, &source.id, placement) {
             self.sync(window, cx);
         }
@@ -143,7 +148,7 @@ impl AppWindow {
                 body = body.child(div().absolute().left(relative(bands[x].0)).w(relative(bands[x].1))
                     .top(relative(bands[y].0)).h(relative(bands[y].1))
                     .drag_over::<TileSource>(move |s, source, window, _| {
-                        if source.window.is_none_or(|id| id == window.window_handle().window_id()) {
+                        if source.accepts(window) {
                             hover.set(workspace_tiles::Slot::parse(placement));
                         }
                         s

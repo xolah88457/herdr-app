@@ -40,6 +40,10 @@ impl AppWindow {
         if tab.zoomed.is_some() || tab.root.panes().len() < 2 || !tab.root.find(pane).is_some_and(Node::is_pane) {
             return false;
         }
+        // Pane tiles draw single panes of this tab: the rest keep stale bounds.
+        if self.workspace_tiling_active() && !self.workspace_roots().any(|r| std::ptr::eq(r, tab.shown())) {
+            return false;
+        }
         let owner = self.chrome.visible_blocks().into_iter().find(|n| matches!(n.content(), Some(Content::Context { .. })));
         inherited_movable(&tab.root, pane)
             .or_else(|| owner.and_then(|n| inherited_movable(&self.chrome, &n.id)))

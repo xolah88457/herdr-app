@@ -667,6 +667,13 @@ enum MotionPolicy {
     },
 }
 
+pub(crate) type DivDecorator = Box<dyn Fn(&str, gpui::Stateful<gpui::Div>) -> gpui::Stateful<gpui::Div>>;
+
+pub(crate) struct DivHooks {
+    pub(crate) decorate: DivDecorator,
+    pub(crate) release_id: &'static str,
+}
+
 /// Materializes a snapshot's root and every descendant.
 ///
 /// Reading is non-destructive, so this may be called any number of times on the
@@ -678,13 +685,6 @@ enum MotionPolicy {
 /// them today: entity-backed components (Input, Tree, Table) and tooltips need
 /// both at construction time, and they are part of this function's contract
 /// rather than an oversight.
-pub(crate) type DivDecorator = Box<dyn Fn(&str, gpui::Stateful<gpui::Div>) -> gpui::Stateful<gpui::Div>>;
-
-pub(crate) struct DivHooks {
-    pub(crate) decorate: DivDecorator,
-    pub(crate) release_id: &'static str,
-}
-
 pub fn materialize(
     runtime: &Rc<ShellRuntime>,
     snapshot: &RenderSnapshot,

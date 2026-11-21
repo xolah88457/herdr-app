@@ -86,17 +86,21 @@ impl WorkspaceTiles {
         let current = owner.current(model);
         // Space and pane layouts don't mix: switching a space's tab could
         // otherwise draw a pane already placed elsewhere in the same frame.
-        self.0.retain(|(o, _)| std::mem::discriminant(o) == std::mem::discriminant(&owner) && o.root(model).is_some());
-        if self.0.is_empty() && let Some(active) = current.as_ref().filter(|o| **o != owner && o.root(model).is_some()) {
-            self.0.push((active.clone(), slot.opposite()));
+        let mut tiles = self.0.clone();
+        tiles.retain(|(o, _)| std::mem::discriminant(o) == std::mem::discriminant(&owner) && o.root(model).is_some());
+        if tiles.is_empty() && let Some(active) = current.as_ref().filter(|o| **o != owner && o.root(model).is_some()) {
+            tiles.push((active.clone(), slot.opposite()));
         }
-        self.0.retain(|(o, s)| *o != owner && !s.overlaps(slot));
+        tiles.retain(|(o, s)| *o != owner && !s.overlaps(slot));
+        // A lone tile would leave the rest of the workspace blank.
+        if tiles.is_empty() { return false; }
         // When the drop covers the active owner, don't leave the keyboard in a
         // hidden terminal. Otherwise keep the user's selection exactly as is.
-        if current.as_ref().is_none_or(|o| *o != owner && !self.contains(o)) && let Some(p) = owner.focused_pane(model) {
+        if current.as_ref().is_none_or(|o| *o != owner && !tiles.iter().any(|(t, _)| t == o)) && let Some(p) = owner.focused_pane(model) {
             model.focus_pane(&p);
         }
-        self.0.push((owner, slot));
+        tiles.push((owner, slot));
+        self.0 = tiles;
         true
     }
 
@@ -104,7 +108,24 @@ impl WorkspaceTiles {
         let before = self.0.len();
         self.0.retain(|(o, _)| o.root(model).is_some());
         let Some((first, _)) = self.0.first() else { return };
-        if first.current(model).as_ref().is_some_and(|o| self.contains(o)) { return; }
+        let current = first.current(model);
+        if self.0.len() < 2 {
+            // A lone tile would leave the rest of the workspace blank: show the survivor normally.
+            if self.0.len() < before && current.as_ref() != Some(first) && let Some(p) = first.focused_pane(model) {
+                model.focus_pane(&p);
+            }
+            self.0.clear();
+            return;
+        }
+        if current.as_ref().is_some_and(|o| self.contains(o)) { return; }
+        // Splitting a tiled pane focuses the new pane: it takes over that tile.
+        if let Some(Owner::Pane(now)) = current
+            && let Some(i) = self.0.iter().position(|(o, _)| matches!(o, Owner::Pane(id)
+                if model.tab_of(id).zip(model.tab_of(&now)).is_some_and(|(a, b)| a.id == b.id)))
+        {
+            self.0[i].0 = Owner::Pane(now);
+            return;
+        }
         if self.0.len() < before && let Some(p) = first.focused_pane(model) {
             // Closing the active tile can select an unrelated tab/space. Keep
             // the surviving tiles and give the keyboard to one still on screen.
@@ -113,6 +134,51 @@ impl WorkspaceTiles {
             // Explicit navigation outside the tiles returns to normal content.
             self.0.clear();
         }
+    }
+}
+
+impl AppWindow {
+    /// Native menu/drop handlers sync the window after changing placements.
+    pub(super) fn place_workspace_tile(&mut self, kind: &str, id: &str, placement: &str) -> bool {
+        self.shows_tab() && self.workspace_tiles.place(&mut self.model, kind, id, placement)
+    }
+
+    pub(super) fn clear_workspace_tiles(&mut self) {
+        self.workspace_tiles.0.clear();
+    }
+
+    pub(super) fn workspace_tiling_active(&self) -> bool {
+        !self.workspace_tiles.0.is_empty()
+    }
+
+    /// The exact original roots drawn in a Context block, also used for attachment and navigation.
+    pub(super) fn workspace_roots(&self) -> impl Iterator<Item = &Node> {
+        let ordinary = (!self.workspace_tiling_active()).then(|| self.model.active_tab()).flatten().map(Tab::shown);
+        ordinary.into_iter().chain(self.workspace_tiles.0.iter().filter_map(|(o, _)| o.root(&self.model)))
+    }
+
+    pub(super) fn render_workspace(&self, focused: &HashSet<String>, cx: &mut Context<Self>) -> AnyElement {
+        let frame = self.pane_frame();
+        if self.workspace_tiling_active() {
+            let mut body = div().relative().size_full().overflow_hidden();
+            let half = |n: u8| relative(f32::from(n) / 2.);
+            for (owner, slot) in &self.workspace_tiles.0 {
+                if let Some(root) = owner.root(&self.model) {
+                    body = body.child(div().absolute().left(half(slot.x)).top(half(slot.y)).w(half(slot.w)).h(half(slot.h))
+                        .overflow_hidden().child(self.render_node(root, focused, frame, cx)));
+                }
+            }
+            return body.into_any_element();
+        }
+        if let Some(tab) = self.model.active_tab() {
+            return self.render_node(tab.shown(), focused, frame, cx);
+        }
+        if self.documents.get("").is_some_and(|s| s.layout() == "loading") {
+            return div().size_full().into_any_element();
+        }
+        let key = crate::keys::listing().into_iter().find(|(_, _, a)| a == "space.new").map(|(_, k, _)| format!(" ({k})"));
+        div().size_full().flex().items_center().justify_center().text_color(c("dim"))
+            .child(format!("No space open. Make one{}.", key.unwrap_or_default())).into_any_element()
     }
 }
 
@@ -196,7 +262,7 @@ mod tests {
     }
 
     #[test]
-    fn closing_the_active_owner_keeps_survivors_in_their_slots() {
+    fn closing_one_of_two_tiles_shows_the_survivor_normally() {
         let mut m = spaces();
         let mut tiles = WorkspaceTiles::default();
         assert!(tiles.place(&mut m, "space", "web", "top"));
@@ -206,55 +272,23 @@ mod tests {
         m.active = Some("db".into()); // fallback chosen by the model
         tiles.reconcile(&mut m);
         assert_eq!(m.focused_pane().as_deref(), Some("server"));
-        assert_eq!(tiles.0.len(), 1);
-        assert_eq!(at(&tiles, &m, "top").unwrap().id, "b");
-        m.remove_space("web");
-        tiles.reconcile(&mut m);
         assert!(tiles.0.is_empty());
-    }
-}
-
-impl AppWindow {
-    /// Native menu/drop handlers sync the window after changing placements.
-    pub(super) fn place_workspace_tile(&mut self, kind: &str, id: &str, placement: &str) -> bool {
-        self.shows_tab() && self.workspace_tiles.place(&mut self.model, kind, id, placement)
+        assert_eq!(m.active.as_deref(), Some("web"));
     }
 
-    pub(super) fn clear_workspace_tiles(&mut self) {
-        self.workspace_tiles.0.clear();
-    }
-
-    pub(super) fn workspace_tiling_active(&self) -> bool {
-        !self.workspace_tiles.0.is_empty()
-    }
-
-    /// The exact original roots drawn in a Context block, also used for attachment and navigation.
-    pub(super) fn workspace_roots(&self) -> impl Iterator<Item = &Node> {
-        let ordinary = (!self.workspace_tiling_active()).then(|| self.model.active_tab()).flatten().map(Tab::shown);
-        ordinary.into_iter().chain(self.workspace_tiles.0.iter().filter_map(|(o, _)| o.root(&self.model)))
-    }
-
-    pub(super) fn render_workspace(&self, focused: &HashSet<String>, cx: &mut Context<Self>) -> AnyElement {
-        let frame = self.pane_frame();
-        if self.workspace_tiling_active() {
-            let mut body = div().relative().size_full().overflow_hidden();
-            let half = |n: u8| relative(f32::from(n) / 2.);
-            for (owner, slot) in &self.workspace_tiles.0 {
-                if let Some(root) = owner.root(&self.model) {
-                    body = body.child(div().absolute().left(half(slot.x)).top(half(slot.y)).w(half(slot.w)).h(half(slot.h))
-                        .overflow_hidden().child(self.render_node(root, focused, frame, cx)));
-                }
-            }
-            return body.into_any_element();
-        }
-        if let Some(tab) = self.model.active_tab() {
-            return self.render_node(tab.shown(), focused, frame, cx);
-        }
-        if self.documents.get("").is_some_and(|s| s.layout() == "loading") {
-            return div().size_full().into_any_element();
-        }
-        let key = crate::keys::listing().into_iter().find(|(_, _, a)| a == "space.new").map(|(_, k, _)| format!(" ({k})"));
-        div().size_full().flex().items_center().justify_center().text_color(c("dim"))
-            .child(format!("No space open. Make one{}.", key.unwrap_or_default())).into_any_element()
+    #[test]
+    fn a_lone_tile_is_refused_and_a_split_pane_joins_its_tile() {
+        let mut m = spaces();
+        let mut tiles = WorkspaceTiles::default();
+        assert!(!tiles.place(&mut m, "space", "api", "left")); // the active owner alone
+        assert!(tiles.0.is_empty());
+        m.add_tab("api", Tab::new("log", "", "tail", "t4"));
+        m.focus_pane("shell");
+        assert!(tiles.place(&mut m, "tab", "log", "top-right"));
+        m.split("shell", Axis::Row, "shell2", "t6");
+        m.focus_pane("shell2");
+        tiles.reconcile(&mut m);
+        assert_eq!(tiles.0.len(), 2);
+        assert_eq!(at(&tiles, &m, "bottom-left").unwrap().id, "shell2");
     }
 }

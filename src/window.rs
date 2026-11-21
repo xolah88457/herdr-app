@@ -1324,7 +1324,7 @@ impl AppWindow {
                 if let Some((name, props)) = &header
                     && n.is_pane()
                 {
-                    mods.push(pane_header_mod(n, name, props, self.workspace_tiling_active()));
+                    mods.push(pane_header_mod(n, name, props));
                 }
                 visit(n, &mut terms, &mut mods);
                 if let Some(a) = self.swapped.get(&n.id) {
@@ -1388,7 +1388,7 @@ impl AppWindow {
                 if let Some((name, props)) = &header
                     && n.is_pane()
                 {
-                    let (slot, i) = pane_header_mod(n, name, props, self.workspace_tiling_active());
+                    let (slot, i) = pane_header_mod(n, name, props);
                     out.insert(slot, i);
                 }
             }
@@ -1944,6 +1944,7 @@ impl AppWindow {
         let focused_pane = if block.is_some() { None } else { m.focused_pane() };
         let mut agents = Vec::new();
         let mut panes = Vec::new();
+        let tiled = self.workspace_tiling_active();
         for pr in &m.spaces {
             for (ci, ctx) in pr.tabs.iter().enumerate() {
                 for p in ctx.root.panes() {
@@ -1951,7 +1952,7 @@ impl AppWindow {
                     let zoomed = ctx.zoomed.as_deref() == Some(p.id.as_str());
                     // A mod pane: what it shows, no terminal.
                     if let Some(Content::Mod { name, .. }) = p.content() {
-                        panes.push(json!({ "pane": p.id, "terminal": null, "mod": name, "tab": ctx.id, "title": name, "name": p.title, "focused": focused, "zoomed": zoomed, "movable": self.pane_movable(&p.id) }));
+                        panes.push(json!({ "pane": p.id, "terminal": null, "mod": name, "tab": ctx.id, "title": name, "name": p.title, "focused": focused, "zoomed": zoomed, "movable": self.pane_movable(&p.id), "tiled": tiled }));
                         continue;
                     }
                     let Some(addr) = p.terminal() else { continue };
@@ -1963,7 +1964,7 @@ impl AppWindow {
                         "pane": p.id, "terminal": addr, "tab": ctx.id, "title": title.clone().unwrap_or_default(), "name": p.title,
                         "cwd": self.cwds.get(addr), "branch": m.folder_info.get(addr).and_then(|f| f.branch.clone()),
                         "status": m.status(addr), "app": a.and_then(|a| a.app.clone()), "program": self.program(addr),
-                        "focused": focused, "zoomed": zoomed, "movable": self.pane_movable(&p.id),
+                        "focused": focused, "zoomed": zoomed, "movable": self.pane_movable(&p.id), "tiled": tiled,
                     }));
                     let Some(status) = m.status(addr) else { continue };
                     agents.push(json!({
@@ -3833,7 +3834,9 @@ impl AppWindow {
         if use_history {
             candidates.extend(self.chrome.visible_blocks().into_iter().filter(|n| self.focusable(&n.id)).map(|n| n.id.clone()));
         }
-        let candidates = candidates.into_iter().filter(|id| id != from).filter_map(|id| Some((id.clone(), *bounds.get(&id)?)));
+        // A swap happens inside one tab: tiles can show panes of others.
+        let tab = |id: &str| self.model.tab_of(id).map(|t| &t.id);
+        let candidates = candidates.into_iter().filter(|id| id != from && (use_history || tab(id) == tab(from))).filter_map(|id| Some((id.clone(), *bounds.get(&id)?)));
         nearest(cur, dir, candidates, if use_history { &self.pane_history } else { &[] })
     }
 
@@ -3897,7 +3900,10 @@ impl AppWindow {
             _ => return Err(format!("direction must be left, right, up or down, not {dir:?}")),
         };
         let found = {
-            self.model.tab_of(pane).ok_or_else(|| format!("no pane {pane:?}"))?;
+            let tab = self.model.tab_of(pane).ok_or_else(|| format!("no pane {pane:?}"))?;
+            if tab.zoomed.is_some() && self.shows_tab() && self.model.active_tab().map(|t| &t.id) == Some(&tab.id) {
+                return Ok(());
+            }
             // Measurements of a tab not drawn now are stale (or missing).
             let root = self.workspace_roots().find(|root| self.shows_tab() && root.find(pane).is_some())
                 .ok_or("that pane isn't on screen")?;
@@ -4732,11 +4738,22 @@ impl AppWindow {
                 .key_context(key_context("Mod", "mod", &inst.name))
                 .when(in_pane, |d| {
                     let id = slot.to_owned();
+                    if !self.workspace_tiling_active() {
+                        return d.on_any_mouse_down(cx.listener(move |this, _, _, cx| {
+                            if this.focused_pane.as_deref() != Some(id.as_str()) {
+                                this.model.focus_pane(&id);
+                                this.focused_pane = Some(id.clone());
+                                this.publish(cx);
+                                this.save();
+                                cx.notify();
+                            }
+                        }));
+                    }
                     d.capture_any_mouse_down(cx.listener(move |this, _, window, cx| {
                         if this.focused_pane.as_deref() != Some(id.as_str()) {
                             // A tiled terminal remains mounted beside the mod. Release
                             // its keyboard before the clicked mod handles the press.
-                            if this.workspace_tiling_active() && this.terms.values().any(|t| t.view.read(cx).owns_keyboard_focus(window, cx)) {
+                            if this.terms.values().any(|t| t.view.read(cx).owns_keyboard_focus(window, cx)) {
                                 this.focus.focus(window, cx);
                             }
                             this.model.focus_pane(&id);
@@ -5412,11 +5429,10 @@ fn float_mod(id: &str, name: &str, props: &Value) -> (String, Instance) {
 }
 
 /// A pane header's slot and copy, told which pane it sits on (a mod pane has no terminal).
-fn pane_header_mod(n: &Node, name: &str, props: &Value, tiled: bool) -> (String, Instance) {
+fn pane_header_mod(n: &Node, name: &str, props: &Value) -> (String, Instance) {
     let mut props = if props.is_object() { props.clone() } else { json!({}) };
     props["pane"] = json!(n.id);
     props["terminal"] = json!(n.terminal());
-    if tiled && name == "pane" { props["workspaceTiled"] = json!(true); }
     (format!("{}#frame", n.id), Instance { name: name.to_owned(), props })
 }
 
