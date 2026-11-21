@@ -813,9 +813,12 @@ export default class Settings extends View {
 
   pi(t) {
     const on = shared("pi-subagents.tmux") === true;
+    const split = shared("pi-subagents.split") === true;
     return v_flex().w_full().child(this.heading(t, "Pi subagents"))
-      .child(this.row(t, "Use tmux", "Applies to new local + menu → Pi subagents sessions. Off uses native Herdr splits; on uses tmux panes. Running sessions stay as they are.",
-        this.toggle(t, "st-pi-tmux", on, () => setShared("pi-subagents.tmux", !on))));
+      .child(this.row(t, "Use tmux", "Applies to new local + menu → Pi subagents sessions. Off uses native Herdr tabs or splits; on uses tmux panes. Running sessions stay as they are.",
+        this.toggle(t, "st-pi-tmux", on, () => setShared("pi-subagents.tmux", !on))))
+      .when(!on, (el) => el.child(this.row(t, "Open workers in a split pane", "Off (default) opens each worker in a background tab like tmux, without taking focus. On opens it as a split beside the parent. Applies to new sessions.",
+        this.toggle(t, "st-pi-split", split, () => setShared("pi-subagents.split", !split)))));
   }
 
   alerts(t) {

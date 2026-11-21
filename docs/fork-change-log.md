@@ -10,7 +10,7 @@ A map for reviewing and changing the fork. The fork's work is merged on `master`
 - **Task board.** The `taskboard` mod shows `tsk list --json` (and `--done`) for the space's folder and machine; `workspace.tasks` toggles it.
 - **+ menu entries.** Entwurf Pi in tmux, Set up Entwurf for Pi…, and Pi subagents. Mod: `defaults/mods/new-menu`.
 - **Pi tmux status bridge.** `integrations/pi-tmux`: a Pi extension publishes state to tmux, `herdr-tmux` reports one aggregate status per attached client.
-- **Pi native-pane subagents.** `integrations/pi-native-panes`: an adapter and patch applied to a copy of the subagent extension so workers open in Herdr splits. The setting `pi-subagents.tmux` selects the tmux backend instead.
+- **Pi native-pane subagents.** `integrations/pi-native-panes`: an adapter and patch applied to a copy of the subagent extension so workers open in a background Herdr tab (or a split beside the parent with `pi-subagents.split`). The setting `pi-subagents.tmux` selects the tmux backend instead.
 
 ## Rules and invariants
 

@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 const source = (await readFile(new URL("../defaults/mods/new-menu/main.js", import.meta.url), "utf8"))
   .replace(/^import .*;\n/gm, "").replace("export default class", "class");
 
-function render(platform: string, space: { id: string; machine?: string } | null, folder?: string, useTmux?: boolean) {
+function render(platform: string, space: { id: string; machine?: string } | null, folder?: string, useTmux?: boolean, split?: boolean) {
   const clicks = new Map<string, () => void>();
   const actions: [string, any][] = [];
   const overlays: any[] = [];
@@ -21,7 +21,7 @@ function render(platform: string, space: { id: string; machine?: string } | null
   }
   const globals = {
     View: class {}, div: element, svg: element, h_flex: element, v_flex: element,
-    shared: (k: string) => k === "pi-subagents.tmux" ? useTmux : undefined, appHome: () => "/private/app home",
+    shared: (k: string) => k === "pi-subagents.tmux" ? useTmux : k === "pi-subagents.split" ? split : undefined, appHome: () => "/private/app home",
     theme: () => ({}), keys: () => [], window: () => ({ platform }),
     spaces: () => space ? [{ ...space, active: true }] : [],
     panes: () => folder ? [{ focused: true, cwd: folder }] : [],
@@ -40,9 +40,13 @@ const local = { id: "local" };
 
 test("Pi subagents pins the local space, folder and selected backend", () => {
   for (const setting of [undefined, true, false]) {
-    const { clicks, actions } = render("macos", local, "/repo", setting);
-    clicks.get("pi-subagents")!();
-    expect(actions[0]).toEqual(["tab.new", {space: local.id, folder: "/repo", argv: ["sh", "-c", expect.any(String), "pi-subagents", "/private/app home/pi-subagents", setting ? "tmux" : "native"]}]);
+    for (const [split, layout] of [[undefined, "tab"], [false, "tab"], [true, "split"]] as const) {
+      const { clicks, actions } = render("macos", local, "/repo", setting, split);
+      clicks.get("pi-subagents")!();
+      expect(actions[0]).toEqual(["tab.new", {space: local.id, folder: "/repo", argv: ["sh", "-c", expect.any(String), "pi-subagents", "/private/app home/pi-subagents", setting ? "tmux" : "native", layout]}]);
+      // The layout reaches the orchestrator through its environment, quoted from argv.
+      expect((actions[0][1] as any).argv[2]).toContain('HERDR_PI_WORKER_LAYOUT="$3" exec "$1/orchestrator" "$2"');
+    }
   }
   expect(render("linux", {id:"remote", machine:"ssh"}).clicks.has("pi-subagents")).toBe(false);
 });

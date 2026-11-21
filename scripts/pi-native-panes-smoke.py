@@ -308,6 +308,8 @@ def smoke(root, args, provider):
     # an installed .app. Point the release resolver at an empty offline directory.
     app_bin = Path(shutil.copy2(app_bin, wrappers / "herdr-app"))
     env["HERDR_RELEASES_URL"] = (root / "no-releases").as_uri()
+    # The assertions below expect splits beside the parent; the default is a background tab.
+    env["HERDR_PI_WORKER_LAYOUT"] = "split"
     print(f"{run(app_bin, '--version')}, {hc('--version')}, Pi {run(wrappers / 'pi', '--version')}",
           flush=True)
     run(integration / "prepare-copy", args.source.resolve(), package)

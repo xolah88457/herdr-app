@@ -6,6 +6,9 @@ backend=${1:?expected native or tmux}; shift
 # Same default as the app (src/mods.rs app_dir).
 : "${HERDR_APP_HOME:=${XDG_CONFIG_HOME:-$HOME/.config}/herdr-app}"
 export HERDR_APP_HOME
+# Where native workers open: tab (background tab, default) or split (beside the parent).
+case ${HERDR_PI_WORKER_LAYOUT:-} in split) ;; *) HERDR_PI_WORKER_LAYOUT=tab ;; esac
+export HERDR_PI_WORKER_LAYOUT
 guide=$(cat "$base/VARIANTS.md")
 set -- --append-system-prompt "$guide
 

@@ -88,6 +88,7 @@ test("Pi subagents defaults to Herdr and the switch persists across Settings vie
     const view = new Settings();
     view.heading = view.row = () => null;
     view.toggle = (_t: unknown, id: string, on: boolean, click: () => void) => {
+      if (id === "st-pi-split") return;
       expect(id).toBe("st-pi-tmux");
       expect(on).toBe(expected);
       click();
@@ -95,6 +96,30 @@ test("Pi subagents defaults to Herdr and the switch persists across Settings vie
     };
     view.pi({});
   }
+});
+
+test("Pi worker layout defaults to a background tab, persists, and is offered only with tmux off", () => {
+  preferences.clear();
+  const toggles = (view: any) => {
+    const seen: Record<string, { on: boolean; click: () => void }> = {};
+    view.heading = view.row = () => null;
+    view.toggle = (_t: unknown, id: string, on: boolean, click: () => void) => { seen[id] = { on, click }; };
+    view.pi({});
+    return seen;
+  };
+  let seen = toggles(new Settings());
+  expect(seen["st-pi-split"].on).toBe(false);
+  seen["st-pi-split"].click();
+  expect(preferences.get("pi-subagents.split")).toBe(true);
+  seen = toggles(new Settings());
+  expect(seen["st-pi-split"].on).toBe(true);
+  seen["st-pi-split"].click();
+  expect(preferences.get("pi-subagents.split")).toBe(false);
+  // With tmux on there are no native workers to place, so the toggle is hidden and the setting is untouched.
+  preferences.set("pi-subagents.tmux", true);
+  seen = toggles(new Settings());
+  expect(Object.keys(seen)).toEqual(["st-pi-tmux"]);
+  expect(preferences.get("pi-subagents.split")).toBe(false);
 });
 
 test("Look offers an independent terminal theme and saves selections from the picker", async () => {

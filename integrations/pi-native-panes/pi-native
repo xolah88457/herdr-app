@@ -9,6 +9,8 @@ entry=$copy/pi-extension/subagents/index.ts
 [ -n "${HC_TERMINAL_ID:-}" ] && [ -z "${TMUX:-}" ] || { echo 'Open a native local Herdr terminal (not tmux), then run pi-native there.' >&2; exit 2; }
 : "${HERDR_APP_HOME:=${XDG_CONFIG_HOME:-$HOME/.config}/herdr-app}"
 export HERDR_APP_HOME
+case ${HERDR_PI_WORKER_LAYOUT:-} in split) ;; *) HERDR_PI_WORKER_LAYOUT=tab ;; esac
+export HERDR_PI_WORKER_LAYOUT
 for tool in pi hc herdr-app; do
   command -v "$tool" >/dev/null 2>&1 || { echo "$tool not found on PATH." >&2; exit 1; }
 done

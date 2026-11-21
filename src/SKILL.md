@@ -213,7 +213,9 @@ Optional helpers live in `integrations/` (details in the installed
 prepared copy at `$HERDR_APP_HOME/pi-subagents`; create it with
 `integrations/pi-native-panes/prepare-copy SOURCE DEST` (`--update COPY`
 refreshes it). Settings > Pi subagents > Use tmux (`pi-subagents.tmux`, off by
-default) picks native Herdr splits or a private tmux session for new launches.
+default) picks native Herdr workers or a private tmux session for new launches.
+Native workers open in a background tab (no focus taken) unless
+`pi-subagents.split` is true, which opens a split beside the parent.
 Use the loaded `subagent` tool; never start a second backend.
 
 For Pi inside tmux, load `integrations/pi-tmux/herdr-status.ts` in Pi and run

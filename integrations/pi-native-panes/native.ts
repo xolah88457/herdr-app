@@ -56,7 +56,7 @@ function binding() {
       record.labels?.["herdr.space"] !== matches[0].spaceId || record.labels?.["herdr.tab"] !== matches[0].tabId) {
     throw new Error(`Herdr parent ${parent} is not bound to this window's space and tab in the selected core.`);
   }
-  return { env, home, parent, pane: matches[0].pane as string };
+  return { env, home, parent, pane: matches[0].pane as string, space: matches[0].spaceId as string, tabId: matches[0].tabId as string };
 }
 
 export function muxSetupHint(): string {
@@ -72,9 +72,15 @@ export function isMuxAvailable(): boolean {
   try { binding(); return true; } catch { return false; }
 }
 
-/** Write the existing invocation first; start it directly in an explicitly targeted split. */
+/** HERDR_PI_WORKER_LAYOUT=split opens workers beside the parent; anything else (the default) is a background tab. */
+function workerLayout(env: NodeJS.ProcessEnv): "split" | "tab" {
+  return env.HERDR_PI_WORKER_LAYOUT === "split" ? "split" : "tab";
+}
+
+/** Write the existing invocation first; start it directly in a background tab (default) or an explicitly targeted split. */
 export function launchSurface(command: string, scriptPath: string, cwd: string): string {
-  const { env, home, parent, pane } = binding();
+  const { env, home, parent, pane, space, tabId } = binding();
+  const tab = workerLayout(env) === "tab";
   mkdirSync(dirname(scriptPath), { recursive: true });
   writeFileSync(scriptPath, [
     "#!/usr/bin/env bash",
@@ -85,20 +91,25 @@ export function launchSurface(command: string, scriptPath: string, cwd: string):
   ].join("\n"), { mode: 0o600, flag: "wx" });
   let reply: any;
   try {
-    reply = json("herdr-app", ["do", "pane.split", JSON.stringify({
-      direction: "right", pane, argv: ["/usr/bin/env", "bash", scriptPath],
-    })], env);
+    const argv = ["/usr/bin/env", "bash", scriptPath];
+    // tab.new replies {space, tab, terminal}; focus:false leaves the shown tab alone.
+    reply = tab
+      ? json("herdr-app", ["do", "tab.new", JSON.stringify({ space, argv, focus: false })], env)
+      : json("herdr-app", ["do", "pane.split", JSON.stringify({ direction: "right", pane, argv })], env);
   } catch (error) {
     removeScript(scriptPath);
     throw error;
   }
-  if (!isTerminal(reply.terminal) || reply.terminal === parent || !isPane(reply.pane) || reply.pane === pane || children.has(reply.terminal)) {
+  const placed = tab
+    ? typeof reply.tab === "string" && reply.tab !== "" && reply.tab !== tabId && reply.space === space
+    : isPane(reply.pane) && reply.pane !== pane;
+  if (!isTerminal(reply.terminal) || reply.terminal === parent || !placed || children.has(reply.terminal)) {
     // The split may have happened; do not leave an untracked worker running.
     if (isTerminal(reply.terminal) && reply.terminal !== parent && !children.has(reply.terminal)) {
       try { json("hc", ["kill", "--json", reply.terminal], env); } catch { /* best effort */ }
     }
     removeScript(scriptPath);
-    throw new Error("Herdr split did not return a distinct local child identity; no target was opened for input.");
+    throw new Error(`Herdr ${tab ? "tab" : "split"} did not return a distinct local child identity; no target was opened for input.`);
   }
   scripts.set(reply.terminal, scriptPath);
   children.set(reply.terminal, env);
