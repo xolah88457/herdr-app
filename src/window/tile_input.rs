@@ -41,7 +41,7 @@ impl Render for TileSource {
 }
 
 // The menu and the drop surface share this map; the center deliberately does nothing.
-const POSITIONS: [[Option<(&str, Slot, &str)>; 3]; 3] = [
+pub(super) const POSITIONS: [[Option<(&str, Slot, &str)>; 3]; 3] = [
     [Some(("top-left", Slot::TOP_LEFT, "Top left")), Some(("top", Slot::TOP, "Top")), Some(("top-right", Slot::TOP_RIGHT, "Top right"))],
     [Some(("left", Slot::LEFT, "Left")), None, Some(("right", Slot::RIGHT, "Right"))],
     [Some(("bottom-left", Slot::BOTTOM_LEFT, "Bottom left")), Some(("bottom", Slot::BOTTOM, "Bottom")), Some(("bottom-right", Slot::BOTTOM_RIGHT, "Bottom right"))],

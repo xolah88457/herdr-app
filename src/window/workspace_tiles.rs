@@ -56,7 +56,10 @@ impl Owner {
     fn root<'m>(&self, model: &'m Model) -> Option<&'m Node> {
         match self {
             Self::Space(id) => Some(model.space(id)?.active_tab()?.shown()),
-            Self::Pane(id) => model.tab_of(id)?.root.find(id).filter(|n| n.is_pane() && !n.hidden),
+            Self::Pane(id) => {
+                let tab = model.tab_of(id)?;
+                tab.root.find(id).filter(|n| n.is_pane() && !n.hidden && tab.root.visible_blocks().iter().any(|b| b.id == *id))
+            }
         }
     }
 
@@ -98,10 +101,10 @@ impl WorkspaceTiles {
         // otherwise draw a pane already placed elsewhere in the same frame.
         let mut tiles = self.0.clone();
         tiles.retain(|(o, _)| std::mem::discriminant(o) == std::mem::discriminant(&owner) && o.root(model).is_some());
+        tiles.retain(|(o, s)| *o != owner && !s.overlaps(slot));
         if tiles.is_empty() && let Some(active) = current.as_ref().filter(|o| **o != owner && o.root(model).is_some()) {
             tiles.push((active.clone(), slot.opposite()));
         }
-        tiles.retain(|(o, s)| *o != owner && !s.overlaps(slot));
         // A lone tile would leave the rest of the workspace blank.
         if tiles.is_empty() { return false; }
         // When the drop covers the active owner, don't leave the keyboard in a
@@ -129,9 +132,11 @@ impl WorkspaceTiles {
         }
         if current.as_ref().is_some_and(|o| self.contains(o)) { return; }
         // Splitting a tiled pane focuses the new pane: it takes over that tile.
-        if let Some(Owner::Pane(now)) = current
+        if self.0.len() == before && let Some(Owner::Pane(now)) = current
+            && let Some(tab) = model.tab_of(&now)
+            && let Some(parent) = tab.root.parent_of(&now).map(|p| p.id.as_str())
             && let Some(i) = self.0.iter().position(|(o, _)| matches!(o, Owner::Pane(id)
-                if model.tab_of(id).zip(model.tab_of(&now)).is_some_and(|(a, b)| a.id == b.id)))
+                if *id != now && tab.root.parent_of(id).is_some_and(|p| p.id == parent)))
         {
             self.0[i].0 = Owner::Pane(now);
             return;
@@ -195,28 +200,21 @@ impl AppWindow {
 #[cfg(test)]
 mod tests {
     use super::{Axis, Content, Model, Node, Slot, Tab, TileKind, WorkspaceTiles, json};
+    use crate::window::tile_input::POSITIONS;
 
     impl Slot {
         /// Named placements keep the tests readable.
         fn named(name: &str) -> Option<Self> {
-            Some(match name {
-                "left" => Self::LEFT,
-                "right" => Self::RIGHT,
-                "top" => Self::TOP,
-                "bottom" => Self::BOTTOM,
-                "top-left" => Self::TOP_LEFT,
-                "top-right" => Self::TOP_RIGHT,
-                "bottom-left" => Self::BOTTOM_LEFT,
-                "bottom-right" => Self::BOTTOM_RIGHT,
-                _ => return None,
-            })
+            POSITIONS.iter().flatten().flatten().find(|(n, ..)| *n == name).map(|(_, slot, _)| *slot)
         }
     }
 
     #[test]
     fn slot_coverage_and_opposites_match_all_eight_drop_positions() {
         let cells = [("top-left", 1), ("top-right", 2), ("bottom-left", 4), ("bottom-right", 8)];
-        for (name, bits) in cells.into_iter().chain([("left", 5), ("right", 10), ("top", 3), ("bottom", 12)]) {
+        let wanted = [("left", 5), ("right", 10), ("top", 3), ("bottom", 12)];
+        assert_eq!(POSITIONS.iter().flatten().flatten().count(), cells.len() + wanted.len());
+        for (name, bits) in cells.into_iter().chain(wanted) {
             let slot = Slot::named(name).unwrap();
             assert_eq!(slot.opposite().opposite(), slot);
             assert!(!slot.overlaps(slot.opposite()));
@@ -316,5 +314,43 @@ mod tests {
         tiles.reconcile(&mut m);
         assert_eq!(tiles.0.len(), 2);
         assert_eq!(at(&tiles, &m, "bottom-left").unwrap().id, "shell2");
+    }
+
+    #[test]
+    fn splitting_the_second_of_two_tiles_from_one_tab_replaces_that_tile() {
+        let mut m = spaces();
+        m.split("shell", Axis::Row, "shell2", "t4");
+        m.focus_pane("shell");
+        let mut tiles = WorkspaceTiles::default();
+        assert!(tiles.place(&mut m, TileKind::Pane, "shell2", Slot::RIGHT));
+        assert_eq!(tiles.0.len(), 2);
+        m.split("shell2", Axis::Column, "shell3", "t5");
+        m.focus_pane("shell3");
+        tiles.reconcile(&mut m);
+        assert_eq!(at(&tiles, &m, "right").unwrap().id, "shell3");
+        assert_eq!(at(&tiles, &m, "left").unwrap().id, "shell");
+    }
+
+    #[test]
+    fn a_drop_covering_every_tile_keeps_the_active_owner_opposite() {
+        let mut m = spaces();
+        let mut tiles = WorkspaceTiles::default();
+        assert!(tiles.place(&mut m, TileKind::Space, "web", Slot::RIGHT));
+        assert!(tiles.place(&mut m, TileKind::Space, "db", Slot::TOP));
+        assert_eq!(tiles.0.len(), 2);
+        assert_eq!(at(&tiles, &m, "top").unwrap().id, "c");
+        assert_eq!(at(&tiles, &m, "bottom").unwrap().id, "a");
+    }
+
+    #[test]
+    fn a_pane_under_a_hidden_ancestor_is_not_a_tile_root() {
+        let mut m = spaces();
+        m.split("shell", Axis::Row, "shell2", "t4");
+        m.focus_pane("shell");
+        let mut tiles = WorkspaceTiles::default();
+        assert!(tiles.place(&mut m, TileKind::Pane, "shell2", Slot::RIGHT));
+        let parent = m.tab("a").unwrap().root.parent_of("shell2").unwrap().id.clone();
+        m.tab_mut("a").unwrap().root.find_mut(&parent).unwrap().hidden = true;
+        assert!(super::Owner::Pane("shell2".into()).root(&m).is_none());
     }
 }
