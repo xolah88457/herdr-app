@@ -1,0 +1,118 @@
+--- a/pi-extension/subagents/index.ts
++++ b/pi-extension/subagents/index.ts
+@@ -20 +20 @@
+-  createSurface,
++  launchSurface,
+@@ -22 +21,0 @@
+-  sendLongCommand,
+@@ -27 +26 @@
+-} from "./tmux.ts";
++} from "./native.ts";
+@@ -515 +514 @@
+-        text: `Subagents require tmux. ${muxSetupHint()}`,
++        text: muxSetupHint(),
+@@ -518 +517 @@
+-    details: { error: "tmux not available" },
++    details: { error: "native Herdr pane not available" },
+@@ -1055 +1053,0 @@
+-    parts.push("--no-extensions");
+@@ -1199 +1197 @@
+-function steerSubagent(
++async function steerSubagent(
+@@ -1203 +1201 @@
+-): { ok: true } | { error: string } {
++): Promise<{ ok: true } | { error: string }> {
+@@ -1206 +1204 @@
+-    send(running.surface, flattened);
++    await send(running.surface, flattened);
+@@ -1211 +1209 @@
+-        `Failed to deliver message to subagent "${running.name}" via tmux: ` +
++        `Failed to deliver message to subagent "${running.name}" via Herdr: ` +
+@@ -1217 +1215 @@
+-function handleSubagentSteer(
++async function handleSubagentSteer(
+@@ -1239 +1237 @@
+-  const steer = steerSubagent(running, message, send);
++  const steer = await steerSubagent(running, message, send);
+@@ -1415,5 +1413 @@
+-  const surfacePreCreated = !!options?.surface;
+-  const surface = options?.surface ?? createSurface(params.name);
+-  if (!surfacePreCreated) {
+-    await new Promise<void>((resolve) => setTimeout(resolve, getShellReadyDelayMs()));
+-  }
++  // Native splits start their program directly; no shell-readiness delay.
+@@ -1484 +1478 @@
+-    const command = `${cdPrefix}${cmdParts.join(" ")}; echo '__SUBAGENT_DONE_'$?'__'`;
++    const command = `${cdPrefix}${cmdParts.join(" ")}`;
+@@ -1494,8 +1488 @@
+-    sendLongCommand(surface, command, {
+-      scriptPath: launchScriptFile,
+-      scriptPreamble: [
+-        `# Claude Code subagent launch script for ${params.name}`,
+-        `# Generated: ${new Date().toISOString()}`,
+-        `# Surface: ${surface}`,
+-      ].join("\n"),
+-    });
++    const surface = launchSurface(command, launchScriptFile, targetCwdForSession);
+@@ -1528 +1515 @@
+-  const parts: string[] = ["pi"];
++  const parts: string[] = ["pi", "--no-extensions"];
+@@ -1592 +1579 @@
+-  envParts.push(`PI_SUBAGENT_SURFACE=${shellEscape(surface)}`);
++  // launchSurface exports the new terminal's own ID.
+@@ -1630 +1617 @@
+-  const command = `${piCommand}; echo '__SUBAGENT_DONE_'$?'__'`;
++  const command = piCommand;
+@@ -1638,9 +1625 @@
+-  sendLongCommand(surface, command, {
+-    scriptPath: launchScriptFile,
+-    scriptPreamble: [
+-      `# Subagent launch script for ${params.name}`,
+-      `# Generated: ${new Date().toISOString()}`,
+-      `# Session: ${subagentSessionFile}`,
+-      `# Surface: ${surface}`,
+-    ].join("\n"),
+-  });
++  const surface = launchSurface(command, launchScriptFile, targetCwdForSession);
+@@ -2066 +2045 @@
+-        "Spawn several sub-agents in parallel — one dedicated tmux pane per task, all using the same agent profile. " +
++        "Spawn several sub-agents in parallel — one native Herdr pane per task, all using the same agent profile. " +
+@@ -2080 +2059 @@
+-          { minItems: 1, maxItems: 12, description: "One task per child; each gets its own tmux pane. Max 12." },
++          { minItems: 1, maxItems: 12, description: "One task per child; each gets its own native Herdr pane. Max 12." },
+@@ -2390,3 +2368,0 @@
+-        const surface = createSurface(name);
+-        await new Promise<void>((resolve) => setTimeout(resolve, getShellReadyDelayMs()));
+-
+@@ -2394 +2370 @@
+-        const parts = ["pi", "--session", shellEscape(sessionPath)];
++        const parts = ["pi", "--no-extensions", "--session", shellEscape(sessionPath)];
+@@ -2453 +2429 @@
+-        const command = `${resumeCdPrefix}${resumeEnvPrefix}${parts.join(" ")}; echo '__SUBAGENT_DONE_'$?'__'`;
++        const command = `${resumeCdPrefix}${resumeEnvPrefix}${parts.join(" ")}`;
+@@ -2464,10 +2440 @@
+-        sendLongCommand(surface, command, {
+-          scriptPath: launchScriptFile,
+-          scriptPreamble: [
+-            `# Subagent resume script for ${name}`,
+-            `# Generated: ${new Date().toISOString()}`,
+-            `# Session: ${sessionPath}`,
+-            `# Surface: ${surface}`,
+-            ...(resumeMsgFile ? [`# Resume message file: ${resumeMsgFile}`] : []),
+-          ].join("\n"),
+-        });
++        const surface = launchSurface(command, launchScriptFile, loadout.cwd ?? ctx.cwd);
+@@ -2650 +2617 @@
+-      const result = handleSubagentSteer({ name, message });
++      const result = await handleSubagentSteer({ name, message });
+@@ -2658 +2625 @@
+-    description: "Show subagent diagnostics: tmux availability, agent dirs, running count, config",
++    description: "Show subagent diagnostics: native Herdr availability, agent dirs, running count, config",
+@@ -2662,2 +2629,2 @@
+-        `tmux: ${isMuxAvailable() ? "available" : `NOT available — ${muxSetupHint()}`}`,
+-        `TMUX env: ${process.env.TMUX ?? "(unset — run pi inside tmux)"}`,
++        `native Herdr: ${isMuxAvailable() ? "available" : `NOT available — ${muxSetupHint()}`}`,
++        `parent terminal: ${process.env.HC_TERMINAL_ID ?? "(not in Herdr)"}`,
+@@ -2669 +2636 @@
+-        `shell ready delay: ${getShellReadyDelayMs()}ms (PI_SUBAGENT_SHELL_READY_DELAY_MS)`,
++        `launch: direct program in native split`,

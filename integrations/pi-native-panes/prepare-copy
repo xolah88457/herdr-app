@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""Make an opt-in native-pane copy. Never edit an installed extension or Pi settings."""
+import argparse
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+HERE = Path(__file__).resolve().parent
+ENTRY = Path('pi-extension/subagents/index.ts')
+
+
+def prepare(source, dest):
+    source, dest = source.resolve(strict=True), dest.resolve()
+    if source == dest or source in dest.parents or dest in source.parents:
+        raise ValueError('source and destination must be separate, non-nested directories')
+    manifest = json.loads((source / 'package.json').read_text())
+    if manifest.get('pi', {}).get('extensions') != ['./' + ENTRY.as_posix()]:
+        raise ValueError('expected a pi-merged package root with pi-extension/subagents/index.ts')
+    patch = HERE / 'native.patch'
+    dest.mkdir(mode=0o700)  # exclusive: never overwrite someone’s copy
+    try:
+        for name in ['package.json', 'LICENSE', 'config.json.example', 'agents', 'pi-extension']:
+            path = source / name
+            if path.is_symlink() or any(p.is_symlink() for p in path.rglob('*')):
+                raise ValueError(f'refusing symlinked extension resources in {path}')
+            if path.is_dir():
+                shutil.copytree(path, dest / name, ignore=shutil.ignore_patterns('.DS_Store', 'node_modules', '__pycache__'))
+            else:
+                shutil.copy2(path, dest / name)
+        subprocess.run(['patch', '-f', '-F', '0', '-p1', '-i', str(patch)], cwd=dest, check=True)
+        for adapter in sorted(HERE.glob('native*.ts')):
+            shutil.copy2(adapter, dest / ENTRY.parent / adapter.name)
+        for name in ['orchestrator', 'pi-native', 'VARIANTS.md']:
+            shutil.copy2(HERE / name, dest / name)
+        for name in ['herdr-tmux', 'herdr-status.ts']:
+            shutil.copy2(HERE.parent / 'pi-tmux' / name, dest / name)
+        (dest / 'tmux-entry').write_text(str(source / ENTRY) + '\n')
+        (dest / '.herdr-native-copy').write_text('Opt-in native pane transport.\n')
+    except BaseException:
+        shutil.rmtree(dest)
+        raise
+    print(dest / ENTRY)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('source', type=Path)
+    parser.add_argument('destination', type=Path, help='new directory under an existing parent')
+    args = parser.parse_args()
+    os.umask(0o077)
+    try:
+        prepare(args.source, args.destination)
+    except (OSError, ValueError, subprocess.CalledProcessError) as exc:
+        sys.exit(f'prepare-copy: {exc}')

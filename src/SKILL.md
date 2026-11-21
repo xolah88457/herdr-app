@@ -197,6 +197,10 @@ floats included, even when the window is covered or minimized. No screen
 capture or permissions. It needs a running window that has drawn a frame;
 `HERDR_APP_HOME` selects the window, as for `status`.
 
+## Pi subagent variants
+
+On local macOS/Linux, **+ > Pi subagents** loads one orchestrator extension. Settings > Pi subagents > Use tmux is off by default (native Herdr split); turn it on for tmux workers. Only new launches through that menu change. Both variants expose `subagent`; use the loaded tool and do not start a second backend. The prepared copy belongs at `pi-subagents/` under the Herdr app home. See `integrations/pi-native-panes/README.md`.
+
 ## Pi inside tmux
 
 Direct interactive Pi reports status to core. For Pi running inside tmux, the optional helpers in the source checkout’s `integrations/pi-tmux/` keep Pi where it is: load `herdr-status.ts` in Pi and run `herdr-tmux SESSION` from a Herdr terminal on the same host. For ordinary manual starts such as `tmux new -s test`, source `shell.sh` in a top-level interactive Herdr shell with `herdr-tmux` on PATH. Hover the agent row for its reported window/pane. `agent.focus` selects the outer terminal, not the inner Pi. Never start another Pi to inspect the first one.

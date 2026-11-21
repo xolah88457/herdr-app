@@ -1,0 +1,24 @@
+#!/bin/sh
+# Invoked with one backend chosen by Herdr, never by a running agent.
+set -eu
+base=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+backend=${1:?expected native or tmux}; shift
+[ -n "${HC_TERMINAL_ID:-}" ] && [ -z "${TMUX:-}" ] || { echo 'Open a local Herdr terminal outside tmux.' >&2; exit 2; }
+provider=${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/npm/node_modules/@router-for-me/pi-cliproxyapi-provider/extensions/index.ts
+if [ -f "$provider" ]; then set -- -e "$provider" "$@"; fi
+guide=$(cat "$base/VARIANTS.md")
+set -- --append-system-prompt "$guide
+
+Active transport for this session: $backend." "$@"
+case $backend in
+  native) exec "$base/pi-native" "$base" "$@" ;;
+  tmux)
+    IFS= read -r entry < "$base/tmux-entry"
+    [ -f "$entry" ] || { echo 'Original tmux extension moved; prepare a fresh copy.' >&2; exit 1; }
+    command -v pi >/dev/null && command -v tmux >/dev/null || { echo 'tmux and pi must be on PATH.' >&2; exit 1; }
+    # Private server per launch: the new session inherits this terminal's environment.
+    socket="herdr-pi-$$-$(date +%s)"
+    tmux -L "$socket" new-session -d -s pi -- pi --no-extensions -e "$entry" -e "$base/herdr-status.ts" "$@"
+    exec "$base/herdr-tmux" -L "$socket" pi ;;
+  *) echo 'Expected native or tmux.' >&2; exit 2 ;;
+esac

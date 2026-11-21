@@ -1,6 +1,6 @@
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { theme, spaces, panes, knownAgents, run, openOverlay, closeOverlay, props, window, keys, shared, setShared } from "herdr";
+import { theme, spaces, panes, knownAgents, run, openOverlay, closeOverlay, props, window, keys, shared, setShared, appHome } from "herdr";
 
 // The last agents each machine reported, shown at once while knownAgents() checks again.
 const KNOWN = "new-menu.agents";
@@ -67,7 +67,8 @@ export default class NewMenu extends View {
     const platform = window()?.platform;
     const entwurf = space && !space.machine && (platform === "macos" || platform === "linux");
     const folder = entwurf ? panes().find(p => p.focused)?.cwd : undefined;
-    const rows = Math.max(1, choices.length + (this.failed ? 1 : 0)) + (entwurf ? 2 : 0);
+    const useTmux = shared("pi-subagents.tmux") === true;
+    const rows = Math.max(1, choices.length + (this.failed ? 1 : 0)) + (entwurf ? 3 : 0);
     return v_flex().min_h(0).w_full().h(Math.min(491, 167 + rows * 31)).bg(t.popover).p(5).text_size(12.8)
       .id("new-menu").track_focus(this.handle)
       .on_key_down((e) => {
@@ -79,6 +80,9 @@ export default class NewMenu extends View {
       })
       .child(this.row("terminal", svg("icons/shell.svg").size(14), "Terminal", () => run("tab.new", { space: space?.id }), shortcut("tab.new")))
       .when(entwurf, el => el
+        .child(this.row("pi-subagents", svg("icons/pi.svg").size(14), "Pi subagents", () => run("tab.new", {
+          space: space.id, folder, argv: ["sh", "-c", 'if [ ! -x "$1/orchestrator" ]; then printf "Prepare the Pi extension copy at %s with integrations/pi-native-panes/prepare-copy first.\\n" "$1" >&2; exit 1; fi; exec "$1/orchestrator" "$2"', "pi-subagents", `${appHome()}/pi-subagents`, useTmux ? "tmux" : "native"],
+        }), useTmux ? "tmux" : "Herdr panes"))
         .child(this.row("entwurf-pi", svg("icons/tmux.svg").size(14), "Entwurf Pi in tmux", () => run("tab.new", { space: space.id, argv: ENTWURF_PI })))
         .child(this.row("entwurf-setup", svg("icons/pi.svg").size(14), "Set up Entwurf for Pi…", () => openOverlay({
           mod: "confirm", kind: "dialog", modal: true, width: 480, height: 220, props: {
