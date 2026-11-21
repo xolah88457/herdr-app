@@ -74,15 +74,20 @@ export function isMuxAvailable(): boolean {
   return !TMUX && !TMUX_PANE && isTerminal(parent) && Boolean(home) && isAbsolute(home!);
 }
 
-/** HERDR_PI_WORKER_LAYOUT=split opens workers beside the parent; anything else (the default) is a background tab. */
-function workerLayout(env: NodeJS.ProcessEnv): "split" | "tab" {
-  return env.HERDR_PI_WORKER_LAYOUT === "split" ? "split" : "tab";
+/**
+ * HERDR_PI_WORKER_LAYOUT=split opens workers beside the parent; hidden runs them with no tab or pane
+ * (a sub-agent under its parent in the Agents list); anything else (the default) is a background tab.
+ */
+export function workerLayout(env: NodeJS.ProcessEnv): "split" | "tab" | "hidden" {
+  const layout = env.HERDR_PI_WORKER_LAYOUT;
+  return layout === "split" || layout === "hidden" ? layout : "tab";
 }
 
-/** Write the existing invocation first; start it directly in a background tab (default) or an explicitly targeted split. */
+/** Write the existing invocation first; start it directly in a background tab (default), an explicitly targeted split, or no window at all. */
 export function launchSurface(command: string, scriptPath: string, cwd: string): string {
   const { env, home, parent, pane, space, tabId } = binding();
-  const tab = workerLayout(env) === "tab";
+  const layout = workerLayout(env);
+  const tab = layout === "tab";
   mkdirSync(dirname(scriptPath), { recursive: true });
   writeFileSync(scriptPath, [
     "#!/usr/bin/env bash",
@@ -95,14 +100,22 @@ export function launchSurface(command: string, scriptPath: string, cwd: string):
   try {
     const argv = ["/usr/bin/env", "bash", scriptPath];
     // tab.new replies {space, tab, terminal}; focus:false leaves the shown tab alone.
-    reply = tab
-      ? json("herdr-app", ["do", "tab.new", JSON.stringify({ space, argv, focus: false })], env)
-      : json("herdr-app", ["do", "pane.split", JSON.stringify({ direction: "right", pane, argv })], env);
+    // hidden: `hc run` from the parent's terminal (HC_TERMINAL_ID stays in env) starts a core terminal with
+    // the parent as its `parent` and no herdr.space label, so it gets no tab or pane and shows under the parent.
+    // The core replies with the new terminal's `address`; the script's own cd sets the folder.
+    if (layout === "hidden") {
+      const started = json("hc", ["run", "--json", "--cwd", cwd, "--", ...argv], env);
+      reply = { terminal: started.address ?? started.terminal };
+    } else {
+      reply = tab
+        ? json("herdr-app", ["do", "tab.new", JSON.stringify({ space, argv, focus: false })], env)
+        : json("herdr-app", ["do", "pane.split", JSON.stringify({ direction: "right", pane, argv })], env);
+    }
   } catch (error) {
     removeScript(scriptPath);
     throw error;
   }
-  const placed = tab
+  const placed = layout === "hidden" ? true : tab
     ? typeof reply.tab === "string" && reply.tab !== "" && reply.tab !== tabId && reply.space === space
     : isPane(reply.pane) && reply.pane !== pane;
   if (!isTerminal(reply.terminal) || reply.terminal === parent || !placed || children.has(reply.terminal)) {
@@ -111,7 +124,7 @@ export function launchSurface(command: string, scriptPath: string, cwd: string):
       try { json("hc", ["kill", "--json", reply.terminal], env); } catch { /* best effort */ }
     }
     removeScript(scriptPath);
-    throw new Error(`Herdr ${tab ? "tab" : "split"} did not return a distinct local child identity; no target was opened for input.`);
+    throw new Error(`Herdr ${layout === "hidden" ? "background terminal" : tab ? "tab" : "split"} did not return a distinct local child identity; no target was opened for input.`);
   }
   scripts.set(reply.terminal, scriptPath);
   children.set(reply.terminal, env);

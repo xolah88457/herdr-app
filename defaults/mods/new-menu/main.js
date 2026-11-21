@@ -72,7 +72,8 @@ export default class NewMenu extends View {
     const localUnix = space && !space.machine && (platform === "macos" || platform === "linux");
     const folder = localUnix ? panes().find(p => p.focused)?.cwd : undefined;
     const useTmux = shared("pi-subagents.tmux") === true;
-    const layout = shared("pi-subagents.split") === true ? "split" : "tab";
+    // hidden: workers run without a tab or pane, under their parent in the Agents list.
+    const layout = shared("pi-subagents.windows") === false ? "hidden" : shared("pi-subagents.split") === true ? "split" : "tab";
     const rows = Math.max(1, choices.length + (this.failed ? 1 : 0)) + (localUnix ? 3 : 0);
     return v_flex().min_h(0).w_full().h(Math.min(491, 167 + rows * 31)).bg(t.popover).p(5).text_size(12.8)
       .id("new-menu").track_focus(this.handle)

@@ -88,7 +88,7 @@ test("Pi subagents defaults to Herdr and the switch persists across Settings vie
     const view = new Settings();
     view.heading = view.row = () => null;
     view.toggle = (_t: unknown, id: string, on: boolean, click: () => void) => {
-      if (id === "st-pi-split") return;
+      if (id === "st-pi-split" || id === "st-pi-windows") return;
       expect(id).toBe("st-pi-tmux");
       expect(on).toBe(expected);
       click();
@@ -120,6 +120,36 @@ test("Pi worker layout defaults to a background tab, persists, and is offered on
   seen = toggles(new Settings());
   expect(Object.keys(seen)).toEqual(["st-pi-tmux"]);
   expect(preferences.get("pi-subagents.split")).toBe(false);
+});
+
+test("Pi worker windows default on, persist, and gate the split row", () => {
+  preferences.clear();
+  const toggles = (view: any) => {
+    const seen: Record<string, { on: boolean; click: () => void }> = {};
+    view.heading = view.row = () => null;
+    view.toggle = (_t: unknown, id: string, on: boolean, click: () => void) => { seen[id] = { on, click }; };
+    view.pi({});
+    return seen;
+  };
+  let seen = toggles(new Settings());
+  expect(Object.keys(seen)).toEqual(["st-pi-tmux", "st-pi-windows", "st-pi-split"]);
+  expect(seen["st-pi-windows"].on).toBe(true);
+  seen["st-pi-windows"].click();
+  expect(preferences.get("pi-subagents.windows")).toBe(false);
+  // Windowless workers have no tab or split to choose.
+  seen = toggles(new Settings());
+  expect(Object.keys(seen)).toEqual(["st-pi-tmux", "st-pi-windows"]);
+  expect(seen["st-pi-windows"].on).toBe(false);
+  seen["st-pi-windows"].click();
+  expect(preferences.get("pi-subagents.windows")).toBe(true);
+  seen = toggles(new Settings());
+  expect(Object.keys(seen)).toEqual(["st-pi-tmux", "st-pi-windows", "st-pi-split"]);
+  // With tmux on, only the tmux row shows and the stored choice is untouched.
+  preferences.set("pi-subagents.windows", false);
+  preferences.set("pi-subagents.tmux", true);
+  seen = toggles(new Settings());
+  expect(Object.keys(seen)).toEqual(["st-pi-tmux"]);
+  expect(preferences.get("pi-subagents.windows")).toBe(false);
 });
 
 test("Look offers an independent terminal theme and saves selections from the picker", async () => {

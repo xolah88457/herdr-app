@@ -216,7 +216,10 @@ prepared copy at `$HERDR_APP_HOME/pi-subagents`; create it with
 refreshes it). Settings > Pi subagents > Use tmux (`pi-subagents.tmux`, off by
 default) picks native Herdr workers or a private tmux session for new launches.
 Native workers open in a background tab (no focus taken) unless
-`pi-subagents.split` is true, which opens a split beside the parent.
+`pi-subagents.split` is true, which opens a split beside the parent; with
+`pi-subagents.windows` false (Settings > Open a window for each worker) they
+get no tab or pane and show only under their parent in the Agents list
+(`terminal.peek` or `terminal.keep` opens one).
 Use the loaded `subagent` tool; never start a second backend.
 
 For Pi inside tmux, load `integrations/pi-tmux/herdr-status.ts` in Pi and run

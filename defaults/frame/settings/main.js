@@ -814,10 +814,13 @@ export default class Settings extends View {
   pi(t) {
     const on = shared("pi-subagents.tmux") === true;
     const split = shared("pi-subagents.split") === true;
+    const windows = shared("pi-subagents.windows") !== false;
     return v_flex().w_full().child(this.heading(t, "Pi subagents"))
       .child(this.row(t, "Use tmux", "Off: workers open in Herdr tabs (or splits, below). On: workers run in tmux panes. Applies to new Pi sessions.",
         this.toggle(t, "st-pi-tmux", on, () => setShared("pi-subagents.tmux", !on))))
-      .when(!on, (el) => el.child(this.row(t, "Open workers in a split pane", "Off (default) opens each worker in a background tab like tmux, without taking focus. On opens it as a split beside the parent. Applies to new sessions.",
+      .when(!on, (el) => el.child(this.row(t, "Open a window for each worker", "On (default): each worker gets a tab or split. Off: workers run in the background with no tab or pane, listed under their parent agent, where you can open one to watch it. Applies to new sessions.",
+        this.toggle(t, "st-pi-windows", windows, () => setShared("pi-subagents.windows", !windows)))))
+      .when(!on && windows, (el) => el.child(this.row(t, "Open workers in a split pane", "Off (default) opens each worker in a background tab like tmux, without taking focus. On opens it as a split beside the parent. Applies to new sessions.",
         this.toggle(t, "st-pi-split", split, () => setShared("pi-subagents.split", !split)))));
   }
 
