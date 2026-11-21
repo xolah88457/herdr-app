@@ -3,9 +3,12 @@
 set -eu
 base=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 backend=${1:?expected native or tmux}; shift
-[ -n "${HC_TERMINAL_ID:-}" ] && [ -z "${TMUX:-}" ] || { echo 'Open a local Herdr terminal outside tmux.' >&2; exit 2; }
-provider=${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/npm/node_modules/@router-for-me/pi-cliproxyapi-provider/extensions/index.ts
-if [ -f "$provider" ]; then set -- -e "$provider" "$@"; fi
+# Same default as the app (src/mods.rs app_dir).
+: "${HERDR_APP_HOME:=${XDG_CONFIG_HOME:-$HOME/.config}/herdr-app}"
+export HERDR_APP_HOME
+# Where native workers open: tab (background tab, default) or split (beside the parent).
+case ${HERDR_PI_WORKER_LAYOUT:-} in split) ;; *) HERDR_PI_WORKER_LAYOUT=tab ;; esac
+export HERDR_PI_WORKER_LAYOUT
 guide=$(cat "$base/VARIANTS.md")
 set -- --append-system-prompt "$guide
 
@@ -15,10 +18,19 @@ case $backend in
   tmux)
     IFS= read -r entry < "$base/tmux-entry"
     [ -f "$entry" ] || { echo 'Original tmux extension moved; prepare a fresh copy.' >&2; exit 1; }
-    command -v pi >/dev/null && command -v tmux >/dev/null || { echo 'tmux and pi must be on PATH.' >&2; exit 1; }
+    # pi-native has its own terminal checks; the tmux path needs them here for the status bridge.
+    [ -n "${HC_TERMINAL_ID:-}" ] && [ -z "${TMUX:-}" ] || { echo 'Open a local Herdr terminal outside tmux.' >&2; exit 2; }
+    for tool in pi tmux python3; do
+      command -v "$tool" >/dev/null 2>&1 || { echo "$tool not found on PATH." >&2; exit 1; }
+    done
     # Private server per launch: the new session inherits this terminal's environment.
     socket="herdr-pi-$$-$(date +%s)"
     tmux -L "$socket" new-session -d -s pi -- pi --no-extensions -e "$entry" -e "$base/herdr-status.ts" "$@"
+    # Closing the Herdr tab only detaches the client. Once a client has attached, destroy the
+    # session (and, with exit-empty, the private server) when the last one goes, so Pi and its
+    # workers do not keep running unreachable. Set from a hook: destroy-unattached acts on detach,
+    # but turning it on before the first attach could end the session at once.
+    tmux -L "$socket" set-hook -t pi client-attached 'set-option -t pi destroy-unattached on'
     exec "$base/herdr-tmux" -L "$socket" pi ;;
   *) echo 'Expected native or tmux.' >&2; exit 2 ;;
 esac

@@ -84,6 +84,15 @@ jobs:
         run: echo "LIBCLANG_PATH=C:\\Program Files\\LLVM\\bin" >> "$GITHUB_ENV"
       - name: Keep unchanged sources fresh
         run: scripts/ci-sources restore
+      - name: Install Bun
+        if: matrix.platform == 'linux-x86_64'
+        run: curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4"
+      # Cheap JS and Python failures show before the long Rust build.
+      - name: Mod and Pi integration tests
+        if: matrix.platform == 'linux-x86_64'
+        run: |
+          command -v tmux >/dev/null || scripts/ci-apt tmux
+          PATH="$HOME/.bun/bin:$PATH" scripts/test-mods
       # Compile the screenshot harness everywhere, even without a desktop.
       # Disable optimized dev dependencies in CI to reduce test compile time.
       - name: Build tests
@@ -123,9 +132,6 @@ jobs:
       - name: Check release packaging
         if: matrix.platform == 'linux-x86_64'
         run: python3 -m unittest discover -s scripts -p test_distribution.py
-      - name: Install Bun
-        if: matrix.platform == 'linux-x86_64'
-        run: curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4"
       - name: Check documentation
         if: matrix.platform == 'linux-x86_64'
         run: |

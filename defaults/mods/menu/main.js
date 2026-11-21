@@ -21,11 +21,6 @@ async function checkout(folder, on) {
   return common.stdout.trim() === `${top.stdout.trim()}/.git` ? "main" : "linked";
 }
 
-// Keep the clicked pane as the target even if another tab has keyboard focus.
-function tileItem(pane) {
-  return pane?.terminal ? [["Floating session view…", "session-tiles", { pane: pane.pane }]] : [];
-}
-
 function items(input, git) {
   const p = input ?? {};
   const tg = p.target ?? {};
@@ -46,7 +41,6 @@ function items(input, git) {
               ["Rename", "pane.rename", { pane: tg.pane }],
               ["Split right", "pane.split", { direction: "right", pane: tg.pane }],
               ["Split down", "pane.split", { direction: "down", pane: tg.pane }],
-              ...tileItem(inTab),
               ["Zoom", "pane.zoom", { pane: tg.pane }],
             ]
           : []),
@@ -62,9 +56,7 @@ function items(input, git) {
       ];
     }
     case "tab": {
-      const sessions = panes().filter(pane => pane.tab === tg.id && pane.terminal);
       return [
-        ...tileItem(sessions.find(pane => pane.focused) ?? sessions[0]),
         ["Rename", "tab.rename", { id: tg.id }],
         ["New tab", "tab.new", { space: tg.space }],
         ["Close", "tab.close", { id: tg.id }],
@@ -129,7 +121,6 @@ export default class Menu extends View {
     if (!it) return;
     closeOverlay(props()?.overlay);
     if (it[1] === "worktree") openOverlay({ mod: "worktree", kind: "dialog", ...(it[2].action === "open" ? { width: 560, height: 480 } : { width: 440, height: 260 }), props: it[2] });
-    else if (it[1] === "session-tiles") openOverlay({ mod: "session-tiles", kind: "dialog", width: 480, height: 400, props: it[2] });
     else run(it[1], it[2]);
   }
 

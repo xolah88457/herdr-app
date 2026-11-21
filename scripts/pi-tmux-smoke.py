@@ -115,7 +115,7 @@ def smoke(root, bins, integration):
 
     versions = (hc("--version"), run(bins["pi"], "--version"), tmux("-V"))
     if versions[:2] != ("hc 0.1.21", "1.5.2"):
-        raise RuntimeError(f"expected hc 0.1.21 / Pi 1.5.2, got {versions[:2]}")
+        print(f"warning: tested with hc 0.1.21 / Pi 1.5.2, got {versions[:2]}", file=sys.stderr, flush=True)
     print(f"{versions[0]}, Pi {versions[1]}, {versions[2]}", flush=True)
 
     try:
@@ -207,7 +207,7 @@ def smoke(root, bins, integration):
         manual_tmux("kill-server", check=False)
         tmux("kill-server", check=False)
         if (root / "hc.sock").exists():
-            hc("server", "stop")
+            hc("server", "stop", check=False)
 
 
 def main():

@@ -667,6 +667,13 @@ enum MotionPolicy {
     },
 }
 
+pub(crate) type DivDecorator = Box<dyn Fn(&str, gpui::Stateful<gpui::Div>) -> gpui::Stateful<gpui::Div>>;
+
+pub(crate) struct DivHooks {
+    pub(crate) decorate: DivDecorator,
+    pub(crate) release_id: &'static str,
+}
+
 /// Materializes a snapshot's root and every descendant.
 ///
 /// Reading is non-destructive, so this may be called any number of times on the
@@ -678,13 +685,6 @@ enum MotionPolicy {
 /// them today: entity-backed components (Input, Tree, Table) and tooltips need
 /// both at construction time, and they are part of this function's contract
 /// rather than an oversight.
-pub(crate) type DivDecorator = Box<dyn Fn(&str, gpui::Stateful<gpui::Div>) -> gpui::Stateful<gpui::Div>>;
-
-pub(crate) struct DivHooks {
-    pub(crate) decorate: DivDecorator,
-    pub(crate) release_id: &'static str,
-}
-
 pub fn materialize(
     runtime: &Rc<ShellRuntime>,
     snapshot: &RenderSnapshot,
@@ -2157,6 +2157,45 @@ fn warn_unhonoured_a11y(behavior: &Behavior, component: &str, honoured: &[&str])
     }
 }
 
+/// Defers the left-button mouse-up callbacks of the release element until row
+/// click/reorder handlers have run, even if the release was outside the strip
+/// or consumed by a drop. Other buttons' callbacks stay in `on_mouse_up`.
+fn defer_left_up(
+    mut stateful: gpui::Stateful<gpui::Div>,
+    on_mouse_up: &mut SmallVec<[(MouseButton, CallbackId); 1]>,
+    runtime: &Rc<ShellRuntime>,
+) -> gpui::Stateful<gpui::Div> {
+    let mut callbacks = SmallVec::<[CallbackId; 1]>::new();
+    on_mouse_up.retain(|(button, callback)| {
+        if *button != MouseButton::Left {
+            return true;
+        }
+        callbacks.push(*callback);
+        false
+    });
+    if !callbacks.is_empty() {
+        let runtime = Rc::downgrade(runtime);
+        let bounds = Rc::new(Cell::new(None::<Bounds<Pixels>>));
+        let writer = Rc::clone(&bounds);
+        stateful = stateful.on_prepaint(move |value, _, _| writer.set(Some(value)))
+            .capture_any_mouse_up(move |event, window, cx| {
+                if event.button != MouseButton::Left {
+                    return;
+                }
+                let event = event.clone();
+                let runtime = runtime.clone();
+                let bounds = bounds.get();
+                let callbacks = callbacks.clone();
+                window.defer(cx, move |window, cx| {
+                    for callback in callbacks {
+                        dispatch_mouse_button(&runtime, callback, &event, bounds, window, cx);
+                    }
+                });
+            });
+    }
+    stateful
+}
+
 /// A plain `div` becomes stateful when a state style needs an identity, or when
 /// the script named it.
 ///
@@ -2220,41 +2259,11 @@ fn flex_element(
     let focus = tracked_focus(runtime, &behavior, "div");
     let identity = element_id(id, behavior.key.clone());
     let stateful = element.id(identity.clone());
-    let stateful = with_gpui_focus(stateful, &behavior, focus.as_ref());
-    let mut stateful = stateful;
+    let mut stateful = with_gpui_focus(stateful, &behavior, focus.as_ref());
     if let (Some(hooks), Some(key)) = (hooks, behavior.key.as_ref()) {
         stateful = (hooks.decorate)(key.as_ref(), stateful);
         if key.as_ref() == hooks.release_id {
-            // Defer the bound reset until row click/reorder handlers have run,
-            // even if the release was outside the strip or consumed by a drop.
-            let mut callbacks = SmallVec::<[CallbackId; 1]>::new();
-            behavior.on_mouse_up.retain(|(button, callback)| {
-                if *button != MouseButton::Left {
-                    return true;
-                }
-                callbacks.push(*callback);
-                false
-            });
-            if !callbacks.is_empty() {
-                let runtime = Rc::downgrade(runtime);
-                let bounds = Rc::new(Cell::new(None::<Bounds<Pixels>>));
-                let writer = Rc::clone(&bounds);
-                stateful = stateful.on_prepaint(move |value, _, _| writer.set(Some(value)))
-                    .capture_any_mouse_up(move |event, window, cx| {
-                        if event.button != MouseButton::Left {
-                            return;
-                        }
-                        let event = event.clone();
-                        let runtime = runtime.clone();
-                        let bounds = bounds.get();
-                        let callbacks = callbacks.clone();
-                        window.defer(cx, move |window, cx| {
-                            for callback in callbacks {
-                                dispatch_mouse_button(&runtime, callback, &event, bounds, window, cx);
-                            }
-                        });
-                    });
-            }
+            stateful = defer_left_up(stateful, &mut behavior.on_mouse_up, runtime);
         }
     }
     let stateful = with_input_handlers(stateful, &behavior, runtime);

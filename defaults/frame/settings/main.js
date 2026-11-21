@@ -26,7 +26,6 @@ const APPEARANCES = [
 // What the app uses when settings.json names no font (settings.rs).
 const DEFAULT_FONT = "JetBrains Mono";
 const DEFAULT_UI_FONT = "Geist";
-const DEFAULT_TERMINAL_THEME = "atom-one-light";
 
 export default class Settings extends View {
   init(_props, cx) {
@@ -409,9 +408,11 @@ export default class Settings extends View {
   }
 
   terminalThemePicker(t) {
-    const current = this.person.terminal_theme ?? DEFAULT_TERMINAL_THEME;
+    // "follow" is the default and what an unknown name falls back to (settings.rs).
+    const names = [...new Set(["follow", ...themes().map(({ name }) => name)])];
+    const current = names.includes(this.person.terminal_theme) ? this.person.terminal_theme : "follow";
     const open = this.picking === "terminal_theme";
-    const label = (name) => name === "follow" ? "Follow Herdr" : name === DEFAULT_TERMINAL_THEME ? "Atom One Light" : name;
+    const label = (name) => name === "follow" ? "Follow Herdr" : name;
     const dismiss = (_e, cx) => {
       this.picking = null;
       this.handle.focus();
@@ -440,7 +441,6 @@ export default class Settings extends View {
       .child(div().text_size(12).text_color(t.muted).child(open ? "▴" : "▾"));
     return Popup.new("st-terminal-theme-popup", trigger)
       .when(open, (el) => {
-        const names = new Set([DEFAULT_TERMINAL_THEME, "follow", ...themes().map(({ name }) => name)]);
         return el.content(
           div()
             .id("st-terminal-theme-list")
@@ -454,7 +454,7 @@ export default class Settings extends View {
             .overflow_y_scrollbar()
             .on_mouse_down_out(dismiss)
             .on_scroll_wheel((_e, cx) => cx.stop_propagation())
-            .children([...names].map((name) =>
+            .children(names.map((name) =>
               h_flex()
                 .id(`st-terminal-theme-option-${name}`)
                 .px(10)
@@ -465,7 +465,11 @@ export default class Settings extends View {
                 .cursor_pointer()
                 .hover((s) => s.bg(t.hover))
                 .on_click((e, cx) => {
-                  this.change((p) => { p.terminal_theme = name; }, cx);
+                  this.change((p) => {
+                    // Follow is the default: leave it out of settings.json.
+                    if (name === "follow") delete p.terminal_theme;
+                    else p.terminal_theme = name;
+                  }, cx);
                   dismiss(e, cx);
                 })
                 .child(div().flex_1().min_w(0).truncate().tooltip(label(name)).text_size(13.5).text_color(t.foreground).child(label(name)))
@@ -809,9 +813,12 @@ export default class Settings extends View {
 
   pi(t) {
     const on = shared("pi-subagents.tmux") === true;
+    const split = shared("pi-subagents.split") === true;
     return v_flex().w_full().child(this.heading(t, "Pi subagents"))
-      .child(this.row(t, "Use tmux", "Applies to new local + menu → Pi subagents sessions. Off uses native Herdr splits; on uses tmux panes. Running sessions stay as they are.",
-        this.toggle(t, "st-pi-tmux", on, () => setShared("pi-subagents.tmux", !on))));
+      .child(this.row(t, "Use tmux", "Off: workers open in Herdr tabs (or splits, below). On: workers run in tmux panes. Applies to new Pi sessions.",
+        this.toggle(t, "st-pi-tmux", on, () => setShared("pi-subagents.tmux", !on))))
+      .when(!on, (el) => el.child(this.row(t, "Open workers in a split pane", "Off (default) opens each worker in a background tab like tmux, without taking focus. On opens it as a split beside the parent. Applies to new sessions.",
+        this.toggle(t, "st-pi-split", split, () => setShared("pi-subagents.split", !split)))));
   }
 
   alerts(t) {
