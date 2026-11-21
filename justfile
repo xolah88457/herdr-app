@@ -42,10 +42,18 @@ pre-release: test docs-check
 build:
     cargo build --locked
 
-test:
-    bun test scripts/changes.test.ts scripts/files.test.ts scripts/machine-add.test.ts scripts/picker.test.ts scripts/palette.test.ts scripts/agents.test.ts scripts/spaces.test.ts scripts/mod-storage.test.ts scripts/worktree.test.ts scripts/settings.test.ts scripts/tabs.test.ts scripts/taskboard.test.ts scripts/new-menu.test.ts scripts/pi-tmux-publisher.test.ts
+test: test-mods
     cargo test --locked
-    python3 -m unittest integrations/pi-tmux/test_herdr_tmux.py
+
+# Bun and Python tests for the mods and the Pi integrations (also run by CI).
+[unix]
+test-mods:
+    sh scripts/test-mods
+
+# Needs sh on PATH (Git for Windows ships one).
+[windows]
+test-mods:
+    sh scripts/test-mods
 
 docs-generate: build
     bun scripts/docs.ts generate
