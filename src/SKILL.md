@@ -220,7 +220,9 @@ Native workers open in a background tab (no focus taken) unless
 `pi-subagents.windows` false (Settings > Open a window for each worker) they
 get no tab or pane and show only under their parent in the Agents list
 (`terminal.peek` or `terminal.keep` opens one).
-Use the loaded `subagent` tool; never start a second backend.
+A provider that is a Pi extension goes in `$HERDR_APP_HOME/pi-subagents/extensions`
+(one path per line; a fresh `prepare-copy` is needed once, `--update` does not
+re-patch). Use the loaded `subagent` tool; never start a second backend.
 
 For Pi inside tmux, load `integrations/pi-tmux/herdr-status.ts` in Pi and run
 `herdr-tmux SESSION` from a Herdr terminal. `agent.focus` selects the outer

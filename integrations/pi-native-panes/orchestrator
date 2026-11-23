@@ -20,6 +20,9 @@ case $backend in
     for tool in pi tmux python3; do
       command -v "$tool" >/dev/null 2>&1 || { echo "$tool not found on PATH." >&2; exit 1; }
     done
+    # Extra provider extensions listed in the copy (pi-native does its own for native).
+    _hx_dir=$base
+    . "$base/extensions.sh"
     # Private server per launch: the new session inherits this terminal's environment.
     socket="herdr-pi-$$-$(date +%s)"
     tmux -L "$socket" new-session -d -s pi -- pi --no-extensions -e "$entry" -e "$base/herdr-status.ts" "$@"

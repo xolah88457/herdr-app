@@ -19,6 +19,14 @@ export function shellEscape(text: string): string {
   return "'" + text.replace(/'/g, "'\\''") + "'";
 }
 
+/** `-e 'PATH'` pairs for the extensions pi-native exports in HERDR_PI_EXTENSIONS (one path per line). Quoted for a shell command. */
+export function extraExtensionArgs(env: NodeJS.ProcessEnv = process.env): string[] {
+  return (env.HERDR_PI_EXTENSIONS ?? "")
+    .split("\n")
+    .filter((path) => path !== "")
+    .flatMap((path) => ["-e", shellEscape(path)]);
+}
+
 /** Turn a failed herdr-app/hc call into a message that says what went wrong. */
 function failure(bin: string, args: string[], error: any): Error {
   if (error?.code === "ENOENT") return new Error(`${bin} not found on PATH.`);

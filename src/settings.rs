@@ -1,7 +1,7 @@
 //! Live settings and the resolved layout look, including persisted app zoom.
 //!
 //! A theme is a palette plus optional color overrides: a built-in preset
-//! (graphite, ink, moss, paper) or `themes/<name>.json`. Chrome colors are
+//! (graphite, ink, moss, paper, paper-dark) or `themes/<name>.json`. Chrome colors are
 //! derived from the palette (dark or light by its background), so every
 //! theme is consistent and overrides only need what they change.
 
@@ -63,21 +63,36 @@ const MOSS: Palette = Palette {
     ],
 };
 
-/// Light: white paper, dark ink. Every ANSI color stays readable on white
+/// Light: warm paper and ink, from the author's site (paper #fbfaf6, ink
+/// #363433, indigo accent #3a4b7c). Every ANSI color stays readable on paper
 /// (bright white is ink, not white: programs write it as "strong" text).
 const PAPER: Palette = Palette {
-    background: 0xffffff,
-    foreground: 0x25272c,
-    selection: 0xcfdcf5,
-    cursor: Some(0x25272c),
-    status: Some([0x9a6700, 0xc93c2c, 0x2f6fe4]),
+    background: 0xfbfaf6,
+    foreground: 0x363433,
+    selection: 0xd5d9e8,
+    cursor: Some(0x363433),
+    status: Some([0x8a5a12, 0xb3392c, 0x3a4b7c]),
     ansi: [
-        0x25272c, 0xc62a2a, 0x1a7f37, 0x8f5d00, 0x1f62d0, 0x7a45c8, 0x0f6f74, 0x5f6068, 0x7b7e87, 0xd1242f, 0x1f883d, 0x9a6700, 0x0969da,
-        0x8250df, 0x1b7c83, 0x111214,
+        0x363433, 0xa8332e, 0x3d6b2e, 0x85580d, 0x3a4b7c, 0x77488a, 0x2d6a6a, 0x5b5851, 0x6b6a64, 0xb8402f, 0x4a7a38, 0x946108, 0x4a5fa0,
+        0x8a55a0, 0x3a7878, 0x1e1c1a,
     ],
 };
 
-pub const PRESETS: &[&str] = &["graphite", "ink", "moss", "paper"];
+/// Dark companion of `paper`: the site's dark mode, warm ink on near-black
+/// brown. Choose both with `"theme": { "light": "paper", "dark": "paper-dark" }`.
+const PAPER_DARK: Palette = Palette {
+    background: 0x171512,
+    foreground: 0xebe7dc,
+    selection: 0x3a3f55,
+    cursor: Some(0xebe7dc),
+    status: Some([0xe0b060, 0xf0806c, 0x8ea2e0]),
+    ansi: [
+        0x6a655a, 0xe08a7c, 0x9bbf80, 0xdcb667, 0x8ea2e0, 0xc6a0d8, 0x7fc0bb, 0xebe7dc, 0xa8a499, 0xf0a395, 0xb2d498, 0xecca85, 0xa8b8f0,
+        0xd8b6e8, 0x9ad4cf, 0xfefdfb,
+    ],
+};
+
+pub const PRESETS: &[&str] = &["graphite", "ink", "moss", "paper", "paper-dark"];
 
 /// The theme a layout without one shows, by appearance.
 pub const DEFAULT_DARK: &str = "graphite";
@@ -89,6 +104,7 @@ fn preset(name: &str) -> Option<&'static Palette> {
         "ink" => Some(&INK),
         "moss" => Some(&MOSS),
         "paper" => Some(&PAPER),
+        "paper-dark" => Some(&PAPER_DARK),
         _ => None,
     }
 }
@@ -965,6 +981,47 @@ pub const DEFAULT_FONT: &str = "JetBrains Mono";
 
 #[cfg(test)]
 mod tests {
+    fn lum(c: u32) -> f64 {
+        let f = |s: u32| {
+            let v = ((c >> s) & 255) as f64 / 255.0;
+            if v <= 0.03928 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+        };
+        0.2126 * f(16) + 0.7152 * f(8) + 0.0722 * f(0)
+    }
+    fn ratio(a: u32, b: u32) -> f64 {
+        let (x, y) = (lum(a), lum(b));
+        (x.max(y) + 0.05) / (x.min(y) + 0.05)
+    }
+    fn tok(t: &super::Theme, k: &str) -> u32 {
+        u32::from_str_radix(&t[k][1..7], 16).unwrap()
+    }
+
+    #[test]
+    fn paper_themes_are_readable() {
+        use super::*;
+        for name in ["paper", "paper-dark"] {
+            let p = preset(name).unwrap();
+            let bg = p.background;
+            assert!(ratio(p.foreground, bg) >= 4.5, "{name} foreground");
+            assert!(ratio(p.foreground, p.selection) >= 4.5, "{name} foreground on selection");
+            for (i, c) in p.ansi.iter().enumerate() {
+                // Black and bright black are dim text on the dark theme.
+                let min = if name == "paper-dark" && (i == 0 || i == 8) { 3.0 } else { 4.5 };
+                assert!(ratio(*c, bg) >= min, "{name} ansi {i}: {:.2}", ratio(*c, bg));
+            }
+            for c in p.status.unwrap() {
+                assert!(ratio(c, bg) >= 3.0, "{name} status {c:06x}");
+            }
+            let t = resolve(p, &BTreeMap::new());
+            for surface in ["background", "chrome", "canvas"] {
+                for text in ["foreground", "muted"] {
+                    let r = ratio(tok(&t, text), tok(&t, surface));
+                    assert!(r >= 4.5, "{name} {text} on {surface}: {r:.2}");
+                }
+            }
+        }
+    }
+
     #[test]
     fn terminal_ligatures_default_off_and_can_be_enabled() {
         use super::*;
@@ -1037,7 +1094,7 @@ mod tests {
 
         settings.terminal_theme = "paper".into();
         assert!(set_from(settings.clone(), &dir));
-        assert_eq!(terminal_theme().bg, Rgb(255, 255, 255));
+        assert_eq!(terminal_theme().bg, Rgb(0xfb, 0xfa, 0xf6));
         assert_eq!(terminal_theme().fg, Rgb(0x44, 0x55, 0x66));
         assert_eq!(theme(), chrome);
 

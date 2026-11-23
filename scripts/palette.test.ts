@@ -23,7 +23,7 @@ const element = () => new Element();
 let platform = "linux";
 const icons: string[] = [];
 let dark = true;
-const shipped = [["graphite", false], ["ink", false], ["moss", false], ["paper", true], ["atom-one-dark", false], ["mine-light", true], ["win98", true]];
+const shipped = [["graphite", false], ["ink", false], ["moss", false], ["paper", true], ["paper-dark", false], ["atom-one-dark", false], ["mine-light", true], ["win98", true]];
 const values = {
   View: class {}, div: element, svg: (path: string) => { icons.push(path); return element(); }, v_flex: element, h_flex: element, Input: { new: element }, theme: () => ({}), keys: () => [], win: () => ({ platform }),
   commands: () => [{ name: "app.theme", args: [{ name: "name", required: true }], about: "Use a theme." }], layouts: () => ["main", "win98"], shared: () => "main",
@@ -84,7 +84,7 @@ test("palette offers only the themes that can show in the current appearance", (
     return view.rows().map((r: any) => r.e).filter((e: any) => e.name === "app.theme").map((e: any) => e.args.name);
   };
   dark = true;
-  expect(offered()).toEqual(["graphite", "ink", "moss", "atom-one-dark"]);
+  expect(offered()).toEqual(["graphite", "ink", "moss", "paper-dark", "atom-one-dark"]);
   dark = false;
   // win98 is the Herdr 98 layout's own theme, so it isn't offered here.
   expect(offered()).toEqual(["paper", "mine-light"]);
