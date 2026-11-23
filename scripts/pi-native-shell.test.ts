@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { closeSurface, isMuxAvailable, launchSurface, shellEscape, workerLayout } from "../integrations/pi-native-panes/native.ts";
+import { closeSurface, extraExtensionArgs, isMuxAvailable, launchSurface, shellEscape, workerLayout } from "../integrations/pi-native-panes/native.ts";
 
 test("shellEscape quotes embedded single quotes for a POSIX shell", () => {
   expect(shellEscape("plain")).toBe("'plain'");
@@ -106,4 +107,94 @@ test("launchSurface rejects a reply naming the parent or no terminal, for every 
       expect(r.calls.some(c => c.startsWith("hc|kill"))).toBe(false);
     }
   }
+});
+
+test("extraExtensionArgs quotes each listed path for a shell command", () => {
+  expect(extraExtensionArgs({})).toEqual([]);
+  expect(extraExtensionArgs({ HERDR_PI_EXTENSIONS: "" })).toEqual([]);
+  expect(extraExtensionArgs({ HERDR_PI_EXTENSIONS: "/a/b.ts\n/it's here/c.ts\n" })).toEqual(["-e", "'/a/b.ts'", "-e", "'/it'\\''s here/c.ts'"]);
+  const out = Bun.spawnSync(["sh", "-c", `printf '%s|' ${extraExtensionArgs({ HERDR_PI_EXTENSIONS: "/x y/it's.ts" }).join(" ")}`]).stdout.toString();
+  expect(out).toBe("-e|/x y/it's.ts|");
+});
+
+const PANES = join(import.meta.dir, "..", "integrations", "pi-native-panes");
+
+/** A prepared-copy stand-in with the real launchers and a fake pi/hc/herdr-app/tmux-free PATH. */
+function launcher(extras: string | null) {
+  const dir = mkdtempSync(join(tmpdir(), "native-ext-"));
+  const copy = join(dir, "copy");
+  const bin = join(dir, "bin");
+  const home = join(dir, "home");
+  mkdirSync(join(copy, "pi-extension", "subagents"), { recursive: true });
+  mkdirSync(bin);
+  mkdirSync(home);
+  writeFileSync(join(copy, "pi-extension", "subagents", "index.ts"), "");
+  writeFileSync(join(copy, ".herdr-native-copy"), "");
+  writeFileSync(join(copy, "VARIANTS.md"), "guide");
+  for (const f of ["pi-native", "orchestrator", "extensions.sh"]) copyFileSync(join(PANES, f), join(copy, f));
+  chmodSync(join(copy, "pi-native"), 0o755);
+  chmodSync(join(copy, "orchestrator"), 0o755);
+  if (extras !== null) writeFileSync(join(copy, "extensions"), extras.replaceAll("$HOME", home));
+  writeFileSync(join(bin, "pi"), `#!/bin/sh\nfor a in "$@"; do printf 'ARG:%s\\n' "$a"; done\nprintf 'ENV:%s\\n' "$(printf %s "\${HERDR_PI_EXTENSIONS:-}" | tr '\\n' ',')"\n`, { mode: 0o755 });
+  for (const t of ["hc", "herdr-app"]) writeFileSync(join(bin, t), "#!/bin/sh\n", { mode: 0o755 });
+  const run = (script: string, args: string[]) => {
+    const env: Record<string, string> = { PATH: `${bin}:${process.env.PATH}`, HOME: home, HC_TERMINAL_ID: "tpar", HERDR_APP_HOME: "/tmp/home" };
+    const r = Bun.spawnSync([join(copy, script), ...args], { env, cwd: dir });
+    const out = r.stdout.toString();
+    return { code: r.exitCode, err: r.stderr.toString(), args: out.split("\n").filter(l => l.startsWith("ARG:")).map(l => l.slice(4)), env: out.split("\n").find(l => l.startsWith("ENV:"))?.slice(4) };
+  };
+  return { dir, copy, home, run, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
+test("pi-native passes listed extensions after the subagent entry and exports them", () => {
+  const t = launcher("# provider\n\n  ~/ext one/index.ts  \n$HOME/two.ts\r\n#/not/used\n");
+  try {
+    mkdirSync(join(t.home, "ext one"));
+    writeFileSync(join(t.home, "ext one", "index.ts"), "");
+    writeFileSync(join(t.home, "two.ts"), "");
+    const r = t.run("pi-native", [t.copy, "--model", "m"]);
+    const entry = join(t.copy, "pi-extension", "subagents", "index.ts");
+    expect(r.err).toBe("");
+    expect(r.args).toEqual(["--no-extensions", "--extension", entry, "--extension", join(t.home, "ext one", "index.ts"), "--extension", join(t.home, "two.ts"), "--model", "m"]);
+    expect(r.env).toBe(`${join(t.home, "ext one", "index.ts")},${join(t.home, "two.ts")}`);
+  } finally { t.cleanup(); }
+});
+
+test("pi-native without an extensions file or with only comments keeps the arguments", () => {
+  for (const extras of [null, "# nothing\n\n"]) {
+    const t = launcher(extras);
+    try {
+      const r = t.run("pi-native", [t.copy, "--model", "m"]);
+      expect(r.args).toEqual(["--no-extensions", "--extension", join(t.copy, "pi-extension", "subagents", "index.ts"), "--model", "m"]);
+      expect(r.env).toBe("");
+    } finally { t.cleanup(); }
+  }
+});
+
+test("pi-native fails early when a listed extension is missing", () => {
+  const t = launcher("~/gone.ts\n");
+  try {
+    const r = t.run("pi-native", [t.copy]);
+    expect(r.code).not.toBe(0);
+    expect(r.err).toContain(`Extension listed in ${join(t.copy, "extensions")} not found: ${join(t.home, "gone.ts")}`);
+    expect(r.args).toEqual([]);
+  } finally { t.cleanup(); }
+});
+
+test("orchestrator tmux passes the listed extensions to the parent Pi", () => {
+  const t = launcher("~/p q.ts\n");
+  try {
+    writeFileSync(join(t.home, "p q.ts"), "");
+    writeFileSync(join(t.copy, "tmux-entry"), join(t.copy, "pi-extension", "subagents", "index.ts") + "\n");
+    writeFileSync(join(t.dir, "bin", "python3"), "#!/bin/sh\n", { mode: 0o755 });
+    // Fake tmux and herdr-tmux record the pi command line instead of starting anything.
+    writeFileSync(join(t.dir, "bin", "tmux"), `#!/bin/sh\nfor a in "$@"; do printf 'T:%s\\n' "$a"; done >> ${join(t.dir, "tmux.log")}\n`, { mode: 0o755 });
+    writeFileSync(join(t.copy, "herdr-tmux"), "#!/bin/sh\n", { mode: 0o755 });
+    const r = t.run("orchestrator", ["tmux"]);
+    expect(r.err).toBe("");
+    const log = readFileSync(join(t.dir, "tmux.log"), "utf8").split("\n");
+    expect(log).toContain("T:--extension");
+    expect(log).toContain(`T:${join(t.home, "p q.ts")}`);
+    expect(log).toContain("T:-e");
+  } finally { t.cleanup(); }
 });

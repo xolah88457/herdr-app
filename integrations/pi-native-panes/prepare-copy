@@ -12,11 +12,19 @@ HERE = Path(__file__).resolve().parent
 ENTRY = Path('pi-extension/subagents/index.ts')
 PINNED_VERSION = '3.8.0-merged.1'  # the version native.patch applies to; keep in sync with the README
 
+EXTENSIONS_TEMPLATE = '''# Extra Pi extensions to load next to the subagent extension, e.g. a model provider.
+# Pi starts with --no-extensions here, so nothing else loads unless it is listed.
+# One path per line. Blank lines and lines starting with # are ignored; ~/ means your home folder.
+# Example:
+# ~/.pi/agent/npm/node_modules/@router-for-me/pi-cliproxyapi-provider/extensions/index.ts
+# prepare-copy --update never changes this file.
+'''
+
 
 def install_launchers(dest):
     """Copy the files that are ours, not the extension's. Safe to repeat."""
     shutil.copy2(HERE / 'native.ts', dest / ENTRY.parent / 'native.ts')
-    for name in ['orchestrator', 'pi-native', 'VARIANTS.md']:
+    for name in ['orchestrator', 'pi-native', 'extensions.sh', 'VARIANTS.md']:
         shutil.copy2(HERE / name, dest / name)
     for name in ['herdr-tmux', 'herdr-status.ts']:
         shutil.copy2(HERE.parent / 'pi-tmux' / name, dest / name)
@@ -58,6 +66,7 @@ def prepare(source, dest, any_version=False):
                 shutil.copy2(path, dest / name)
         subprocess.run(['patch', '-f', '-F', '0', '-p1', '-i', str(patch)], cwd=dest, check=True)
         install_launchers(dest)
+        (dest / 'extensions').write_text(EXTENSIONS_TEMPLATE)
         (dest / 'tmux-entry').write_text(str(source / ENTRY) + '\n')
         (dest / '.herdr-native-copy').write_text('Opt-in native pane transport.\n')
     except BaseException:

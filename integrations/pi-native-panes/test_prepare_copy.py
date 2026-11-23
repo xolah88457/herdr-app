@@ -95,9 +95,31 @@ class PrepareCopyTest(unittest.TestCase):
         self.assertEqual((dest / 'pi-extension' / 'subagents' / 'native.ts').read_text(), (HERE / 'native.ts').read_text())
         self.assertEqual((dest / 'orchestrator').read_text(), (HERE / 'orchestrator').read_text())
         self.assertEqual((dest / 'herdr-tmux').read_text(), (HERE.parent / 'pi-tmux' / 'herdr-tmux').read_text())
-        for name in ['pi-native', 'VARIANTS.md', 'herdr-status.ts']:
+        for name in ['pi-native', 'extensions.sh', 'VARIANTS.md', 'herdr-status.ts']:
             self.assertTrue((dest / name).is_file(), name)
         self.assertEqual((dest / 'pi-extension' / 'subagents' / 'index.ts').read_text(), 'patched extension')
+
+    def test_update_keeps_the_users_extensions_file(self):
+        dest = self.root / 'copy'
+        (dest / 'pi-extension' / 'subagents').mkdir(parents=True)
+        (dest / '.herdr-native-copy').write_text('marker\n')
+        (dest / 'extensions').write_text('/my/provider.ts\n')
+        with contextlib.redirect_stdout(io.StringIO()):
+            prepare_copy.update(dest)
+        self.assertEqual((dest / 'extensions').read_text(), '/my/provider.ts\n')
+
+    def test_fresh_copy_gets_the_extensions_template(self):
+        source = fake_source(self.root)
+        for name in ['LICENSE', 'config.json.example']:
+            (source / name).write_text('x')
+        (source / 'agents').mkdir()
+        dest = self.root / 'dest'
+        with mock.patch.object(prepare_copy.subprocess, 'run'), contextlib.redirect_stdout(io.StringIO()):
+            prepare_copy.prepare(source, dest)
+        text = (dest / 'extensions').read_text()
+        self.assertIn('One path per line', text)
+        self.assertTrue(all(line.startswith('#') for line in text.splitlines()), 'template lists nothing by default')
+        self.assertIn('# ~/.pi/agent/npm/node_modules/', text)
 
 
 if __name__ == '__main__':

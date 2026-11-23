@@ -12,4 +12,6 @@ export HERDR_APP_HOME
 for tool in pi hc herdr-app; do
   command -v "$tool" >/dev/null 2>&1 || { echo "$tool not found on PATH." >&2; exit 1; }
 done
+_hx_dir=$copy
+. "$copy/extensions.sh"
 exec pi --no-extensions --extension "$entry" "$@"
