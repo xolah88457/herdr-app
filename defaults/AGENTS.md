@@ -365,9 +365,10 @@ layout's look and a block can differ:
   "terminal_padding": [10, 6], "terminal_opacity": 1, ... }
 ```
 
-- `theme`: `graphite`, `ink`, `moss` (dark), `paper` (light), or the name
+- `theme`: `graphite`, `ink`, `moss`, `paper-dark` (dark), `paper` (light), or the name
   of a file in `themes/`; or one for each appearance:
-  `"theme": { "light": "paper", "dark": "graphite" }` follows the system's
+  `"theme": { "light": "paper", "dark": "paper-dark" }` (the two
+  halves of the paper look, from the author's site) follows the system's
   light or dark mode (or the person's `appearance`). `app.theme {name}`
   sets the half of the name's lightness. A layout without a theme shows
   settings.json's theme, else graphite or paper. `colors` overrides any theme color by name (see

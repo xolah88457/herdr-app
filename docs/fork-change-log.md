@@ -6,6 +6,7 @@ A map for reviewing and changing the fork. The fork's work is merged on `master`
 
 - **Workspace tiling.** Show two spaces, tabs or panes side by side in the main workspace, by right-click **Tile…** or by dragging a sidebar row or tab onto an edge or corner. Code: `src/window/workspace_tiles.rs`, `tile_input.rs`, `workspace_roots`/`render_workspace` in `src/window.rs`.
 - **Terminal theme option.** `terminal_theme` (default `follow`) colors terminals apart from the app, with shipped `atom-one-dark`, `atom-one-light`, `win98` themes and `terminal_bold_foreground`. Code: `src/settings.rs`, `src/vt.rs`, `defaults/themes/`.
+- **Paper themes.** Built-in `paper` (light) and `paper-dark` take the owner's website palette; `src/settings.rs` tests their WCAG contrast. Pair them with `"theme": {"light":"paper","dark":"paper-dark"}`.
 - **Tab labels.** Unnamed tabs show the program or agent's live title plus folder and branch when useful; an explicit `tab.named` name wins, except one equal (case-insensitive) to the lead program's name (older versions saved those), which keeps following the agent title. Mod: `defaults/mods/tabs`.
 - **Task board.** The `taskboard` mod shows `tsk list --json` (and `--done`) for the space's folder and machine; `workspace.tasks` toggles it.
 - **+ menu entries.** Entwurf Pi in tmux, Set up Entwurf for Pi…, and Pi subagents. Mod: `defaults/mods/new-menu`.
