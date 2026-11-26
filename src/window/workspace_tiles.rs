@@ -172,7 +172,7 @@ impl AppWindow {
         ordinary.into_iter().chain(self.workspace_tiles.0.iter().filter_map(|(o, _)| o.root(&self.model)))
     }
 
-    pub(super) fn render_workspace(&self, focused: &HashSet<String>, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_workspace(&self, focused: &HashSet<String>, rendered_dividers: &mut HashSet<(String, usize)>, cx: &mut Context<Self>) -> AnyElement {
         let frame = self.pane_frame();
         if self.workspace_tiling_active() {
             let mut body = div().relative().size_full().overflow_hidden();
@@ -180,13 +180,13 @@ impl AppWindow {
             for (owner, slot) in &self.workspace_tiles.0 {
                 if let Some(root) = owner.root(&self.model) {
                     body = body.child(div().absolute().left(half(slot.x)).top(half(slot.y)).w(half(slot.w)).h(half(slot.h))
-                        .overflow_hidden().child(self.render_node(root, focused, frame, cx)));
+                        .overflow_hidden().child(self.render_node(root, focused, frame, rendered_dividers, cx)));
                 }
             }
             return body.into_any_element();
         }
         if let Some(tab) = self.model.active_tab() {
-            return self.render_node(tab.shown(), focused, frame, cx);
+            return self.render_node(tab.shown(), focused, frame, rendered_dividers, cx);
         }
         if self.documents.get("").is_some_and(|s| s.layout() == "loading") {
             return div().size_full().into_any_element();

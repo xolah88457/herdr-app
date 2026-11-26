@@ -3,7 +3,7 @@
 
 use crate::{layout::Node, links};
 use gpui::App;
-use gpui_shell::{Capabilities, ExecuteGrant, HostError, HostModule, HostObject, HostValue, NetworkGrant};
+use herdr_shell::{Capabilities, ExecuteGrant, HostError, HostModule, HostObject, HostValue, NetworkGrant};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::cell::{Cell, RefCell};
@@ -81,7 +81,7 @@ pub fn write_workspace() -> std::io::Result<()> {
         let _ = std::fs::remove_file(dir.join("CLAUDE.md"));
     }
     write_if_changed(&dir.join("herdr.d.ts"), DECLARATIONS)?;
-    let types = gpui_shell::type_declarations(&gpui_shell::FrozenComponentRegistry::default());
+    let types = herdr_shell::type_declarations(&herdr_shell::FrozenComponentRegistry::default());
     write_if_changed(&dir.join("gpui-kit.d.ts"), &types)?;
     let _ = std::fs::remove_dir_all(frame_dir());
     for (path, bytes) in FRAME_MODS {
@@ -620,7 +620,7 @@ pub struct Snapshot {
     pub focused: Value,
     /// Floating blocks by id: { edge, align, vertical }.
     pub floats: Value,
-    /// { platform, titlebar, buttons, maximized, fullscreen, active }.
+    /// { platform, titlebar, buttons, maximized, fullscreen, active, visible }.
     pub window: Value,
 }
 
@@ -752,7 +752,7 @@ fn read(reads: &RefCell<LiveReads>, key: &'static str, f: impl FnOnce(&Snapshot)
         }
         // Output and resizing change these numbers without invalidating mods.
         let mut panes = snapshot.panes.clone();
-        gpui_shell::with_current_app(|cx| {
+        herdr_shell::with_current_app(|cx| {
             PANE_VIEWS.with_borrow(|views| {
                 for pane in panes.as_array_mut().into_iter().flatten() {
                     if let Some(view) = pane["pane"].as_str().and_then(|id| {
@@ -768,7 +768,7 @@ fn read(reads: &RefCell<LiveReads>, key: &'static str, f: impl FnOnce(&Snapshot)
     })
 }
 
-fn reader(reads: Rc<RefCell<LiveReads>>, key: &'static str, f: fn(&Snapshot) -> &Value) -> impl Fn(&gpui_shell::HostArguments) -> gpui_shell::HostResult {
+fn reader(reads: Rc<RefCell<LiveReads>>, key: &'static str, f: fn(&Snapshot) -> &Value) -> impl Fn(&herdr_shell::HostArguments) -> herdr_shell::HostResult {
     move |_| Ok(read(&reads, key, f))
 }
 
@@ -885,7 +885,7 @@ pub(crate) fn run_blocking(command: &str, args: &[String], cwd: Option<String>, 
     use std::io::Read;
     // The core may have no `hc` link beside it (a Windows zip has only herdr-core.exe).
     let program = if command == "hc" { crate::core_bin::path() } else { PathBuf::from(command) };
-    let mut child = crate::spawn::command(program)
+    let mut child = crate::spawn::detached_command(program)
         .args(args)
         .current_dir(cwd.map(PathBuf::from).unwrap_or_else(home))
         .stdin(Stdio::null())
@@ -1173,7 +1173,7 @@ fn module(inst: Instance, copy: u64) -> HostModule {
         })
         .function("feedbackPasteImage", move |_| {
             if !feedback_frame { return Err(HostError::new("feedback screenshots are frame-only")); }
-            let bytes = gpui_shell::with_current_app(|cx| {
+            let bytes = herdr_shell::with_current_app(|cx| {
                 cx.read_from_clipboard()?.entries().iter().find_map(|e| match e {
                     gpui::ClipboardEntry::Image(i) => Some(i.bytes.clone()),
                     _ => None,
@@ -1191,7 +1191,7 @@ fn module(inst: Instance, copy: u64) -> HostModule {
         })
         .async_function("feedbackPickImages", move |_| {
             if !feedback_frame { return Err(HostError::new("feedback screenshots are frame-only")); }
-            let picked = gpui_shell::with_current_app(|cx| cx.prompt_for_paths(gpui::PathPromptOptions {
+            let picked = herdr_shell::with_current_app(|cx| cx.prompt_for_paths(gpui::PathPromptOptions {
                 files: true, directories: false, multiple: true, prompt: Some("Add".into()),
             })).ok_or_else(|| HostError::new("no window to pick from"))?;
             Ok(async move {
@@ -1215,12 +1215,25 @@ fn module(inst: Instance, copy: u64) -> HostModule {
         })
         .async_function("pickFolder", |a| {
             let prompt = a.get(0).map(from_host).and_then(|v| v.get("prompt").and_then(Value::as_str).map(str::to_owned)).unwrap_or_else(|| "Open".into());
-            let picked = gpui_shell::with_current_app(|cx| cx.prompt_for_paths(gpui::PathPromptOptions {
+            let picked = herdr_shell::with_current_app(|cx| cx.prompt_for_paths(gpui::PathPromptOptions {
                 files: false, directories: true, multiple: false, prompt: Some(prompt.into()),
             })).ok_or_else(|| HostError::new("no window to pick from"))?;
             Ok(async move {
                 let path = picked.await.ok().and_then(Result::ok).flatten().and_then(|p| p.into_iter().next());
                 Ok(path.map(|p| HostValue::Str(p.to_string_lossy().into_owned())).unwrap_or(HostValue::Null))
+            })
+        })
+        .async_function("pickFiles", |a| {
+            let options = a.get(0);
+            let prompt = opt_str(options, "prompt").unwrap_or_else(|| "Open".into());
+            let multiple = options.and_then(|o| o.get("multiple")).and_then(HostValue::as_bool).unwrap_or(false);
+            let picked = herdr_shell::with_current_app(|cx| cx.prompt_for_paths(gpui::PathPromptOptions {
+                files: true, directories: false, multiple, prompt: Some(prompt.into()),
+            })).ok_or_else(|| HostError::new("no window to pick from"))?;
+            Ok(async move {
+                let paths = picked.await.map_err(|_| HostError::new("the file picker was lost"))?
+                    .map_err(|error| HostError::new(error.to_string()))?;
+                picked_files(paths)
             })
         })
         .function("feedbackClearImages", move |_| {
@@ -1358,7 +1371,7 @@ fn module(inst: Instance, copy: u64) -> HostModule {
 
 /// The runtime's base layer, themed from settings.json.
 pub fn init(cx: &mut App) {
-    gpui_shell::init(cx);
+    herdr_shell::init(cx);
     apply_theme(cx);
 }
 
@@ -1388,9 +1401,17 @@ pub fn apply_theme(cx: &mut App) {
 }
 
 fn capabilities() -> Capabilities {
+    capabilities_at(home(), app_dir(), false)
+}
+
+fn capabilities_at(home: PathBuf, app: PathBuf, read_mods: bool) -> Capabilities {
+    let mut read_roots = vec![home];
+    if read_mods {
+        read_roots.push(app.join("mods"));
+    }
     Capabilities::new()
-        .read_roots([home()])
-        .write_roots([app_dir()])
+        .read_roots(read_roots)
+        .write_roots([app])
         .execute(ExecuteGrant::Unrestricted)
         .network(NetworkGrant::Unrestricted)
         .storage(true)
@@ -1409,7 +1430,7 @@ pub fn install_check_policy() {
 
 /// What mods may touch, and the `herdr` module they import.
 pub fn install_policy() -> async_channel::Receiver<Request> {
-    gpui_shell::policy::update_default(|p| {
+    herdr_shell::policy::update_default(|p| {
         p.with_capabilities(capabilities())
             .with_host_module(module(Instance { name: String::new(), props: Value::Null }, 0))
             .expect("herdr module is valid")
@@ -1426,11 +1447,11 @@ pub fn install_policy() -> async_channel::Receiver<Request> {
 /// Readies the next load of `inst`; returns the copy's number (for commands).
 pub fn prepare_load(inst: &Instance) -> u64 {
     let (copy, policy) = mod_policy(inst);
-    gpui_shell::policy::set_default(policy);
+    herdr_shell::policy::set_default(policy);
     copy
 }
 
-fn mod_policy(inst: &Instance) -> (u64, gpui_shell::policy::Policy) {
+fn mod_policy(inst: &Instance) -> (u64, herdr_shell::policy::Policy) {
     let copy = COPY_SEQ.with(|s| {
         s.set(s.get() + 1);
         s.get()
@@ -1445,9 +1466,10 @@ fn mod_policy(inst: &Instance) -> (u64, gpui_shell::policy::Policy) {
         inst.props.to_string().hash(&mut h);
         format!("store-{:016x}.json", h.finish())
     };
-    let policy = gpui_shell::policy::Policy::new()
+    let policy = herdr_shell::policy::Policy::new()
         .with_application(inst.key())
-        .with_capabilities(capabilities())
+        // The shipped palette reads manifests even when the app home is outside the login home.
+        .with_capabilities(capabilities_at(home(), app_dir(), inst.name == "frame-palette"))
         .with_shared_storage_path(dir.join(file))
         .with_host_module(module(inst.clone(), copy))
         .expect("herdr module is valid");
@@ -1463,7 +1485,7 @@ pub fn handle_link(
 ) -> impl std::future::Future<Output = anyhow::Result<String>> + use<> {
     use std::{future::{Future, poll_fn}, pin::pin, task::Poll};
     let (_, policy) = mod_policy(&Instance { name: name.to_owned(), props: Value::Null });
-    let call = gpui_shell::ShellRuntime::call_module(dir, "link.js", "handleLink", click, Rc::new(policy), window, cx);
+    let call = herdr_shell::ShellRuntime::call_module(dir, "link.js", "handleLink", click, Rc::new(policy), window, cx);
     let timeout = cx.background_executor().timer(Duration::from_secs(30));
     async move {
         let mut call = pin!(call);
@@ -1485,9 +1507,19 @@ pub fn check_link_mod(dir: &Path) -> anyhow::Result<bool> {
     anyhow::ensure!(rules.is_empty() || has_link, "mod.json declares link_handlers but link.js is missing");
     let handles_links = standalone || !rules.is_empty();
     if handles_links {
-        gpui_shell::ShellRuntime::check_module(dir, "link.js", "handleLink")?;
+        herdr_shell::ShellRuntime::check_module(dir, "link.js", "handleLink")?;
     }
     Ok(handles_links)
+}
+
+fn picked_files(paths: Option<Vec<PathBuf>>) -> herdr_shell::HostResult {
+    let Some(paths) = paths.filter(|paths| !paths.is_empty()) else {
+        return Ok(HostValue::Null);
+    };
+    paths.into_iter().map(|path| {
+        path.into_os_string().into_string().map(HostValue::Str)
+            .map_err(|_| HostError::new("a selected file path is not valid UTF-8"))
+    }).collect::<Result<Vec<_>, _>>().map(HostValue::Array)
 }
 
 #[cfg(test)]
@@ -1686,6 +1718,26 @@ mod tests {
     }
 
     #[test]
+    fn picked_files_keep_the_pickers_order_and_cancel_is_null() {
+        let picked = picked_files(Some(vec!["/b/2.txt".into(), "/a/1.txt".into()])).unwrap();
+        assert_eq!(from_host(&picked), json!(["/b/2.txt", "/a/1.txt"]));
+        assert_eq!(picked_files(None).unwrap(), HostValue::Null);
+        assert_eq!(picked_files(Some(vec![])).unwrap(), HostValue::Null);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn picked_files_rejects_a_path_that_would_name_a_different_file_after_conversion() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let exact = "/a/bad-\u{fffd}.txt";
+        let invalid = std::ffi::OsString::from_vec(b"/a/bad-\xff.txt".to_vec());
+        let picked = picked_files(Some(vec![exact.into()])).unwrap();
+        assert_eq!(from_host(&picked), json!([exact]));
+        assert!(picked_files(Some(vec![exact.into(), invalid.into()])).is_err());
+    }
+
+    #[test]
     fn exec_timeout_defaults_caps_and_rejects_invalid_values() {
         assert_eq!(exec_limit(None).unwrap(), EXEC_LIMIT);
         assert_eq!(exec_limit(Some(&HostObject::new().field("timeout", HostValue::Null).into())).unwrap(), EXEC_LIMIT);
@@ -1738,6 +1790,49 @@ mod tests {
         assert!(error.contains("0.03 s"), "{error}");
         let (code, stdout, _) = run_blocking("sh", &args, None, Duration::from_secs(2)).unwrap();
         assert_eq!((code, stdout.as_str()), (0, "done"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn exec_keeps_a_background_job_running() {
+        const CHILD: &str = "HERDR_TEST_BACKGROUND_EXEC";
+        if std::env::var_os(CHILD).is_some() {
+            let args = ["--noprofile", "--norc", "-ic", "printf ready"].map(String::from);
+            let (code, stdout, stderr) = run_blocking("/bin/bash", &args, None, Duration::from_secs(2)).unwrap();
+            assert_eq!((code, stdout.as_str()), (0, "ready"), "{stderr}");
+            return;
+        }
+
+        // util-linux `script` gives Bash a real controlling PTY; some desktops don't have it.
+        if std::process::Command::new("script").arg("--version").output().is_err() {
+            eprintln!("skipped: util-linux script is not installed");
+            return;
+        }
+        // Give Bash a real controlling PTY and run the test in a background job.
+        let output = std::process::Command::new("timeout")
+            .args([
+                "15s",
+                "script",
+                "-qec",
+                r#"exec /bin/bash --noprofile --norc -mc '
+                    "$HERDR_TEST_BINARY" --exact mods::tests::exec_keeps_a_background_job_running &
+                    child=$!
+                    wait "$child"
+                    status=$?
+                    if [ "$status" -ne 0 ]; then
+                        jobs -l
+                        kill -KILL -- "-$child" 2>/dev/null || :
+                    fi
+                    exit "$status"
+                '"#,
+                "/dev/null",
+            ])
+            .env(CHILD, "1")
+            .env("HERDR_TEST_BINARY", std::env::current_exe().unwrap())
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "background job: {}\n{}{}", output.status, String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
     }
 
     #[cfg(unix)]

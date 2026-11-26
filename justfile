@@ -43,7 +43,7 @@ build:
     cargo build --locked
 
 test: test-mods
-    cargo test --locked
+    cargo test --locked -p herdr-app -p herdr-shell
 
 # Bun and Python tests for the mods and the Pi integrations (also run by CI).
 [unix]

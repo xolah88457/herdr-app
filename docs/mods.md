@@ -14,6 +14,7 @@ The `herdr.d.ts` (shipped with the app) and generated `gpui-kit.d.ts` beside you
 Start with Settings for fonts, colors and sounds.
 For deeper changes, duplicate a shipped layout or mod from the command palette, then edit the copy.
 Shipped files update on start; personal copies do not.
+A mod can add its own entries to the command palette with a `palette` list in its `mod.json`.
 Save to reload. Check for errors, even when the old screen still looks fine.
 
 ```sh
